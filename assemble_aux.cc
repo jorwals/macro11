@@ -543,22 +543,16 @@ void push_cond(
     conds[last_cond].line = str->line;
 }
 
-/*
-  pop_cond - pop stacked conditionals. */
-
-void pop_cond(
-    int to)
-{
-    while (last_cond > to) {
-        free(conds[last_cond].file);
-        last_cond--;
-    }
+// pop_cond - pop stacked conditionals.
+void pop_cond(int to) {
+  while (last_cond > to) {
+    free(conds[last_cond].file);
+    last_cond--;
+  }
 }
 
-
-/* go_section - sets current_pc to a new program section */
-
-void go_section(TEXT_RLD* tr, SECTION* sect) {
+// go_section() - sets current_pc to a new program section
+void go_section(TEXT_RLD* tr [[maybe_unused]], SECTION* sect) {
   if (current_pc->section == sect) return; /* This is too easy */
 
   /* save current PC value for old section */
@@ -569,35 +563,30 @@ void go_section(TEXT_RLD* tr, SECTION* sect) {
   DOT = sect->pc;
 }
 
-/*
-  store_value - used to store a value represented by an expression
-  tree into the object file.  Used by do_word and .ASCII/.ASCIZ.
-*/
+// store_value() - used to store a value represented by an expression tree into
+// the object file.  Used by do_word and .ASCII/.ASCIZ.
+void store_value(STACK* stack, TEXT_RLD* tr, int size, EX_TREE* value) {
+  SYMBOL* sym;
+  unsigned offset;
 
-void store_value(
-    STACK *stack,
-    TEXT_RLD *tr,
-    int size,
-    EX_TREE *value)
-{
-    SYMBOL         *sym;
-    unsigned        offset;
+  implicit_gbl(value); /* turn undefined symbols into globals */
 
-    implicit_gbl(value);               /* turn undefined symbols into globals */
-
-    if (value->type == EX_LIT) {
-        store_word(stack->top, tr, size, value->data.lit);
-    } else if (!express_sym_offset(value, &sym, &offset)) {
-        store_complex(stack->top, tr, size, value);
+  if (value->type == EX_LIT) {
+    store_word(stack->top, tr, size, value->data.lit);
+  } else if (!express_sym_offset(value, &sym, &offset)) {
+    store_complex(stack->top, tr, size, value);
+  } else {
+    if ((sym->flags & (SYMBOLFLAG_GLOBAL | SYMBOLFLAG_DEFINITION)) ==
+        SYMBOLFLAG_GLOBAL) {
+      store_global_offset_word(stack->top, tr, size, sym->value + offset,
+                               sym->label.c_str());
+    } else if (sym->section != current_pc->section) {
+      store_psect_offset_word(stack->top, tr, size, sym->value + offset,
+                              sym->section->label.c_str());
     } else {
-        if ((sym->flags & (SYMBOLFLAG_GLOBAL | SYMBOLFLAG_DEFINITION)) == SYMBOLFLAG_GLOBAL) {
-          store_global_offset_word(stack->top, tr, size, sym->value + offset, sym->label.c_str());
-        } else if (sym->section != current_pc->section) {
-          store_psect_offset_word(stack->top, tr, size, sym->value + offset, sym->section->label.c_str());
-        } else {
-            store_internal_word(stack->top, tr, size, sym->value + offset);
-        }
+      store_internal_word(stack->top, tr, size, sym->value + offset);
     }
+  }
 }
 
 /* do_word - used by .WORD, .BYTE, and implied .WORD. */

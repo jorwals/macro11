@@ -1,4 +1,22 @@
-CXXFLAGS ?= -O -g -std=c++20 -Wall
+UNAME_S := $(shell uname -s)
+
+ifeq ($(UNAME_S), Darwin)
+HOMEBREW_PREFIX = $(shell brew config | grep HOMEBREW_PREFIX | sed -e 's/^[^:]*: //')
+ABSLINC = -isystem $(HOMEBREW_PREFIX)/include
+ABSLLIB = -L$(HOMEBREW_PREFIX)/lib
+ABSLEXTRALIB =
+ABSLVIEWLIB = -labsl_string_view
+else
+ABSLINC =
+ABSLLIB =
+ABSLEXTRALIB = -labsl_throw_delegate
+ABSLVIEWLIB =
+endif
+
+CXX = g++
+CXXFLAGS ?= -O -g -std=c++20 -fstrict-enums -Werror -Wall -Wextra \
+	-Weffc++ -Wextra-semi -Wsuggest-override -Wmismatched-tags \
+	-Woverloaded-virtual -Wold-style-cast -Wregister
 
 MACRO11_SRCS = macro11.cc \
 	assemble.cc assemble_globals.cc assemble_aux.cc	\

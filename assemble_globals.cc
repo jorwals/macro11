@@ -61,16 +61,16 @@ SECTION        *last_dot_section;       /* ...and it's program section */
 the assembler: */
 
 // the section containing the registers
-SECTION register_section = {"", SECTION_REGISTER, 0, 0};
+SECTION register_section = {"", SECTION_REGISTER, 0, 0, 0, 0};
 
 // the section containing the pseudo-operations
-SECTION pseudo_section = {"", SECTION_PSEUDO, 0, 0};
+SECTION pseudo_section = {"", SECTION_PSEUDO, 0, 0, 0, 0};
 
 // the section containing instructions
-SECTION instruction_section = {". ABS.", SECTION_INSTRUCTION, 0, 0};
+SECTION instruction_section = {". ABS.", SECTION_INSTRUCTION, 0, 0, 0, 0};
 
 // Section for macros
-SECTION macro_section = {"", SECTION_SYSTEM, 0, 0, 0};
+SECTION macro_section = {"", SECTION_SYSTEM, 0, 0, 0, 0};
 
 // These are real psects that get written out to the object file
 

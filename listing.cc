@@ -85,7 +85,8 @@ static void list_fit(
         list_flush();
         listline[0] = 0;
         binline[0] = 0;
-        snprintf(binline, sizeof(LSTFORMAT), "%*s %6.6o", (int)offsetof(LSTFORMAT, pc), "", addr);
+        snprintf(binline, sizeof(LSTFORMAT), "%*s %6.6o",
+                 static_cast<int>(offsetof(LSTFORMAT, pc)), "", addr);
         padto(binline, offsetof(LSTFORMAT, words));
     } else if (strlen(binline) <= col2) {
       snprintf(binline, sizeof(LSTFORMAT), "%*s%*d %6.6o",

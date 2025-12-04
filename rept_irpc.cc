@@ -27,44 +27,33 @@ typedef struct rept_stream {
                                    expansion */
 } REPT_STREAM;
 
-/* rept_stream_gets gets a line from a repeat stream.  At the end of
-   each count, the coutdown is decreated and the stream is reset to
-   it's beginning. */
+// rept_stream_gets() gets a line from a repeat stream.  At the end of each
+// count, the coutdown is decreated and the stream is reset to it's beginning.
+char* rept_stream_gets(STREAM* str) {
+  REPT_STREAM* rstr = reinterpret_cast<REPT_STREAM*>(str);
+  char* cp;
 
-char           *rept_stream_gets(
-    STREAM *str)
-{
-    REPT_STREAM    *rstr = (REPT_STREAM *) str;
-    char           *cp;
+  for (;;) {
+    if ((cp = buffer_stream_gets(str)) != nullptr) return cp;
 
-    for (;;) {
-        if ((cp = buffer_stream_gets(str)) != nullptr)
-            return cp;
+    if (--rstr->count <= 0) return nullptr;
 
-        if (--rstr->count <= 0)
-            return nullptr;
-
-        buffer_stream_rewind(str);
-    }
+    buffer_stream_rewind(str);
+  }
 }
 
-/* rept_stream_delete unwinds nested conditionals like .MEXIT does. */
+// rept_stream_delete() unwinds nested conditionals like .MEXIT does.
+void rept_stream_delete(STREAM* str) {
+  REPT_STREAM* rstr = reinterpret_cast<REPT_STREAM*>(str);
 
-void rept_stream_delete(
-    STREAM *str)
-{
-    REPT_STREAM    *rstr = (REPT_STREAM *) str;
-
-    pop_cond(rstr->savecond);          /* complete unterminated
-                                          conditionals */
-    buffer_stream_delete(&rstr->bstr.stream);
+  pop_cond(rstr->savecond); /* complete unterminated
+                               conditionals */
+  buffer_stream_delete(&rstr->bstr.stream);
 }
 
-/* The VTBL */
-
-STREAM_VTBL     rept_stream_vtbl = {
-    rept_stream_delete, rept_stream_gets, buffer_stream_rewind
-};
+// The VTBL
+STREAM_VTBL rept_stream_vtbl = {rept_stream_delete, rept_stream_gets,
+                                buffer_stream_rewind};
 
 /* expand_rept is called when a .REPT is encountered in the input. */
 
@@ -129,125 +118,109 @@ typedef struct irp_stream {
     int             savecond;   /* Saved conditional level */
 } IRP_STREAM;
 
-/* irp_stream_gets expands the IRP as the stream is read. */
-/* Each time an iteration is exhausted, the next iteration is
-   generated. */
+// irp_stream_gets() expands the IRP as the stream is read. Each time an
+// iteration is exhausted, the next iteration is generated.
+char* irp_stream_gets(STREAM* str) {
+  IRP_STREAM* istr = reinterpret_cast<IRP_STREAM*>(str);
+  char* cp;
+  BUFFER* buf;
+  ARG* arg;
 
-char           *irp_stream_gets(
-    STREAM *str)
-{
-    IRP_STREAM     *istr = (IRP_STREAM *) str;
-    char           *cp;
-    BUFFER         *buf;
-    ARG            *arg;
+  for (;;) {
+    if ((cp = buffer_stream_gets(str)) != nullptr) return cp;
 
-    for (;;) {
-        if ((cp = buffer_stream_gets(str)) != nullptr)
-            return cp;
+    cp = istr->items + istr->offset;
 
-        cp = istr->items + istr->offset;
+    if (!*cp) return nullptr; /* No more items.  EOF. */
 
-        if (!*cp)
-            return nullptr;               /* No more items.  EOF. */
-
-        arg = new_arg();
-        arg->next = nullptr;
-        arg->locsym = 0;
-        arg->label = istr->label;
-        arg->value = getstring(cp, &cp);
-        cp = skipdelim(cp);
-        istr->offset = (int) (cp - istr->items);
-
-        eval_arg(str, arg);
-        buf = subst_args(istr->body, arg);
-
-        free(arg->value);
-        free(arg);
-        buffer_stream_set_buffer(&istr->bstr, buf);
-        buffer_free(buf);
-    }
-}
-
-/* irp_stream_delete - also pops the conditional stack */
-
-void irp_stream_delete(
-    STREAM *str)
-{
-    IRP_STREAM     *istr = (IRP_STREAM *) str;
-
-    pop_cond(istr->savecond);          /* complete unterminated
-                                          conditionals */
-
-    buffer_free(istr->body);
-    free(istr->items);
-    free(istr->label);
-    buffer_stream_delete(str);
-}
-
-STREAM_VTBL     irp_stream_vtbl = {
-    irp_stream_delete, irp_stream_gets, buffer_stream_rewind
-};
-
-/* expand_irp is called when a .IRP is encountered in the input. */
-
-STREAM         *expand_irp(
-    STACK *stack,
-    char *cp)
-{
-    char           *label,
-                   *items;
-    BUFFER         *gb;
-    int             levelmod = 0;
-    IRP_STREAM     *str;
-
-    label = get_symbol(cp, &cp, nullptr);
-    if (!label) {
-        report(stack->top, "Illegal .IRP syntax\n");
-        return nullptr;
-    }
-
+    arg = new_arg();
+    arg->next = nullptr;
+    arg->locsym = 0;
+    arg->label = istr->label;
+    arg->value = getstring(cp, &cp);
     cp = skipdelim(cp);
+    istr->offset = static_cast<int>(cp - istr->items);
 
-    items = getstring(cp, &cp);
-    if (!items) {
-        report(stack->top, "Illegal .IRP syntax\n");
-        free(label);
-        return nullptr;
-    }
+    eval_arg(str, arg);
+    buf = subst_args(istr->body, arg);
 
-    gb = new_buffer();
-
-    levelmod = 0;
-    if (!list_md) {
-        list_level--;
-        levelmod++;
-    }
-
-    read_body(stack, gb, nullptr, FALSE);
-
-    list_level += levelmod;
-
-    str = static_cast<IRP_STREAM*>(memcheck(malloc(sizeof(IRP_STREAM))));
-    {
-      const size_t namesz = strlen(stack->top->name) + 32;
-      char* name = static_cast<char*>(memcheck(malloc(namesz)));
-
-      snprintf(name, namesz, "%s:%d->.IRP", stack->top->name, stack->top->line);
-      buffer_stream_construct(&str->bstr, nullptr, name);
-      free(name);
-    }
-
-    str->bstr.stream.vtbl = &irp_stream_vtbl;
-
-    str->body = gb;
-    str->items = items;
-    str->offset = 0;
-    str->label = label;
-    str->savecond = last_cond;
-
-    return &str->bstr.stream;
+    free(arg->value);
+    free(arg);
+    buffer_stream_set_buffer(&istr->bstr, buf);
+    buffer_free(buf);
+  }
 }
 
+// irp_stream_delete() - also pops the conditional stack
+void irp_stream_delete(STREAM* str) {
+  IRP_STREAM* istr = reinterpret_cast<IRP_STREAM*>(str);
+
+  pop_cond(istr->savecond); /* complete unterminated
+                               conditionals */
+
+  buffer_free(istr->body);
+  free(istr->items);
+  free(istr->label);
+  buffer_stream_delete(str);
+}
+
+STREAM_VTBL irp_stream_vtbl = {irp_stream_delete, irp_stream_gets,
+                               buffer_stream_rewind};
+
+// expand_irp is called when a .IRP is encountered in the input.
+STREAM* expand_irp(STACK* stack, char* cp) {
+  char *label, *items;
+  BUFFER* gb;
+  int levelmod = 0;
+  IRP_STREAM* str;
+
+  label = get_symbol(cp, &cp, nullptr);
+  if (!label) {
+    report(stack->top, "Illegal .IRP syntax\n");
+    return nullptr;
+  }
+
+  cp = skipdelim(cp);
+
+  items = getstring(cp, &cp);
+  if (!items) {
+    report(stack->top, "Illegal .IRP syntax\n");
+    free(label);
+    return nullptr;
+  }
+
+  gb = new_buffer();
+
+  levelmod = 0;
+  if (!list_md) {
+    list_level--;
+    levelmod++;
+  }
+
+  read_body(stack, gb, nullptr, FALSE);
+
+  list_level += levelmod;
+
+  str = static_cast<IRP_STREAM*>(memcheck(malloc(sizeof(IRP_STREAM))));
+  {
+    const size_t namesz = strlen(stack->top->name) + 32;
+    char* name = static_cast<char*>(memcheck(malloc(namesz)));
+
+    snprintf(name, namesz, "%s:%d->.IRP", stack->top->name, stack->top->line);
+    buffer_stream_construct(&str->bstr, nullptr, name);
+    free(name);
+  }
+
+  str->bstr.stream.vtbl = &irp_stream_vtbl;
+
+  str->body = gb;
+  str->items = items;
+  str->offset = 0;
+  str->label = label;
+  str->savecond = last_cond;
+
+  return &str->bstr.stream;
+}
 
 /* *** implement IRPC_STREAM */
 
@@ -261,57 +234,49 @@ typedef struct irpc_stream {
     int             savecond;   /* conditional stack at invocation */
 } IRPC_STREAM;
 
-/* irpc_stream_gets - same comments apply as with irp_stream_gets, but
-   the substitution is character-by-character */
+// irpc_stream_gets() - same comments apply as with irp_stream_gets, but the
+// substitution is character-by-character
+char* irpc_stream_gets(STREAM* str) {
+  IRPC_STREAM* istr = reinterpret_cast<IRPC_STREAM*>(str);
+  char* cp;
+  BUFFER* buf;
+  ARG* arg;
 
-char           *irpc_stream_gets(
-    STREAM *str)
-{
-    IRPC_STREAM    *istr = (IRPC_STREAM *) str;
-    char           *cp;
-    BUFFER         *buf;
-    ARG            *arg;
+  for (;;) {
+    if ((cp = buffer_stream_gets(str)) != nullptr) return cp;
 
-    for (;;) {
-        if ((cp = buffer_stream_gets(str)) != nullptr)
-            return cp;
+    cp = istr->items + istr->offset;
 
-        cp = istr->items + istr->offset;
+    if (!*cp) return nullptr; /* No more items.  EOF. */
 
-        if (!*cp)
-            return nullptr;               /* No more items.  EOF. */
+    arg = new_arg();
+    arg->next = nullptr;
+    arg->locsym = 0;
+    arg->label = istr->label;
+    arg->value = static_cast<char*>(memcheck(malloc(2)));
+    arg->value[0] = *cp++;
+    arg->value[1] = 0;
+    istr->offset = static_cast<int>(cp - istr->items);
 
-        arg = new_arg();
-        arg->next = nullptr;
-        arg->locsym = 0;
-        arg->label = istr->label;
-        arg->value = static_cast<char*>(memcheck(malloc(2)));
-        arg->value[0] = *cp++;
-        arg->value[1] = 0;
-        istr->offset = (int) (cp - istr->items);
+    buf = subst_args(istr->body, arg);
 
-        buf = subst_args(istr->body, arg);
-
-        free(arg->value);
-        free(arg);
-        buffer_stream_set_buffer(&istr->bstr, buf);
-        buffer_free(buf);
-    }
+    free(arg->value);
+    free(arg);
+    buffer_stream_set_buffer(&istr->bstr, buf);
+    buffer_free(buf);
+  }
 }
 
-/* irpc_stream_delete - also pops contidionals */
+// irpc_stream_delete - also pops contidionals
+void irpc_stream_delete(STREAM* str) {
+  IRPC_STREAM* istr = reinterpret_cast<IRPC_STREAM*>(str);
 
-void irpc_stream_delete(
-    STREAM *str)
-{
-    IRPC_STREAM    *istr = (IRPC_STREAM *) str;
-
-    pop_cond(istr->savecond);          /* complete unterminated
-                                          conditionals */
-    buffer_free(istr->body);
-    free(istr->items);
-    free(istr->label);
-    buffer_stream_delete(str);
+  pop_cond(istr->savecond); /* complete unterminated
+                               conditionals */
+  buffer_free(istr->body);
+  free(istr->items);
+  free(istr->label);
+  buffer_stream_delete(str);
 }
 
 STREAM_VTBL     irpc_stream_vtbl = {

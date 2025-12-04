@@ -1,8 +1,6 @@
-/*
-  object.c - writes RT-11 compatible .OBJ files.
-
-  Ref: RT-11 Software Support Manual, File Formats.
-*/
+// object.c - writes RT-11 compatible .OBJ files.
+//
+// Ref: RT-11 Software Support Manual, File Formats.
 
 /*
 
@@ -142,7 +140,7 @@ static int gsd_write(GSD* gsd, const char* name, const int flags,
   char* cp;
   unsigned radtbl[2];
 
-  if (gsd->offset > sizeof(gsd->buf) - 8) {
+  if (static_cast<size_t>(gsd->offset) > sizeof(gsd->buf) - 8) {
     if (!gsd_flush(gsd)) return 0;
   }
 
@@ -260,8 +258,8 @@ int text_flush(TEXT_RLD* tr) {
    flushed. */
 
 static int text_fit(TEXT_RLD* tr, unsigned addr, int txtsize, int rldsize) {
-  if (tr->txt_offset + txtsize <= sizeof(tr->text) &&
-      tr->rld_offset + rldsize <= sizeof(tr->rld) &&
+  if (static_cast<size_t>(tr->txt_offset) + txtsize <= sizeof(tr->text) &&
+      static_cast<size_t>(tr->rld_offset) + rldsize <= sizeof(tr->rld) &&
       (txtsize == 0 || tr->txt_addr + tr->txt_offset - 4 == addr))
     return 1; /* All's well. */
 
@@ -613,7 +611,7 @@ void text_complex_begin(TEXT_COMPLEX* tx) { tx->len = 0; }
 static char* text_complex_fit(TEXT_COMPLEX* tx, int size) {
   int len;
 
-  if (tx->len + size > sizeof(tx->accum))
+  if (static_cast<size_t>(tx->len) + size > sizeof(tx->accum))
     return nullptr; /* Expression has grown too complex. */
 
   len = tx->len;

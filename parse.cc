@@ -300,12 +300,12 @@ int parse_float(char* cp, char** endp, int size, unsigned* flt) {
     }
   }
 
-  flt[0] = (unsigned)(sign | (exp << 7) | ((ufrac >> 48) & 0x7F));
+  flt[0] = static_cast<unsigned>(sign | (exp << 7) | ((ufrac >> 48) & 0x7F));
   if (size > 1) {
-    flt[1] = (unsigned)((ufrac >> 32) & 0xffff);
+    flt[1] = static_cast<unsigned>((ufrac >> 32) & 0xffff);
     if (size > 2) {
-      flt[2] = (unsigned)((ufrac >> 16) & 0xffff);
-      flt[3] = (unsigned)((ufrac >> 0) & 0xffff);
+      flt[2] = static_cast<unsigned>((ufrac >> 16) & 0xffff);
+      flt[3] = static_cast<unsigned>((ufrac >> 0) & 0xffff);
     }
   }
 
