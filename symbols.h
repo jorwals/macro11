@@ -1,3 +1,4 @@
+#include <string>
 
 #ifndef SYMBOLS__H
 #define SYMBOLS__H
@@ -10,7 +11,7 @@
 
 /* Program sections: */
 typedef struct section {
-    char           *label;      /* Section name */
+    std::string     label;      /* Section name */
     unsigned        type;       /* Section type */
 #define SECTION_USER 1          /* user-defined */
 #define SECTION_SYSTEM 2        /* A system symbol (like "."; value is an enum) */
@@ -28,7 +29,7 @@ typedef struct section {
 /* Symbol table entries */
 
 typedef struct symbol {
-    char           *label;      /* Symbol name */
+    std::string     label;      /* Symbol name */
     unsigned        value;      /* Symbol value */
     int             stmtno;     /* Statement number of symbol's definition */
     unsigned        flags;      /* Symbol flags */
@@ -321,41 +322,22 @@ extern SYMBOL_TABLE implicit_st;        /* The symbols which may be implicit glo
 
 #endif
 
-int             hash_name(
-    char *label);
+int hash_name(const char* label);
 
-SYMBOL         *add_sym(
-    char *label,
-    unsigned value,
-    unsigned flags,
-    SECTION *section,
-    SYMBOL_TABLE *table);
-SYMBOL         *first_sym(
-    SYMBOL_TABLE *table,
-    SYMBOL_ITER *iter);
+SYMBOL* add_sym(const char* label, unsigned value, unsigned flags,
+                SECTION* section, SYMBOL_TABLE* table);
+SYMBOL* first_sym(SYMBOL_TABLE* table, SYMBOL_ITER* iter);
 
-SYMBOL         *lookup_sym(
-    char *label,
-    SYMBOL_TABLE *table);
-SYMBOL         *next_sym(
-    SYMBOL_TABLE *table,
-    SYMBOL_ITER *iter);
-void            free_sym(
-    SYMBOL *sym);
+SYMBOL* lookup_sym(const char* label, SYMBOL_TABLE* table);
+SYMBOL* next_sym(SYMBOL_TABLE* table, SYMBOL_ITER* iter);
+void free_sym(SYMBOL* sym);
 
-void            remove_sym(
-    SYMBOL *sym,
-    SYMBOL_TABLE *table);
+void remove_sym(SYMBOL* sym, SYMBOL_TABLE* table);
 
-char           *symflags(
-    SYMBOL *sym);
+char* symflags(SYMBOL* sym);
 
-void            add_table(
-    SYMBOL *sym,
-    SYMBOL_TABLE *table);
+void add_table(SYMBOL* sym, SYMBOL_TABLE* table);
 
-
-void            add_symbols(
-    SECTION *current_section);
+void add_symbols(SECTION* current_section);
 
 #endif

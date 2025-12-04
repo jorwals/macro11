@@ -26,111 +26,102 @@
 /* *** derive a MACRO_STREAM from a BUFFER_STREAM with a few other args */
 
 
-/* macro_stream_delete is called when a macro expansion is
-   exhausted.  The unique behavior is to unwind any stacked
-   conditionals.  This allows a nested .MEXIT to work.  */
+// macro_stream_delete is called when a macro expansion is exhausted.  The
+// unique behavior is to unwind any stacked conditionals.  This allows a nested
+// .MEXIT to work.
 
-void macro_stream_delete(
-    STREAM *str)
-{
-    MACRO_STREAM   *mstr = (MACRO_STREAM *) str;
+void macro_stream_delete(STREAM* str) {
+  MACRO_STREAM* mstr = reinterpret_cast<MACRO_STREAM*>(str);
 
-    pop_cond(mstr->cond);
-    buffer_stream_delete(str);
+  pop_cond(mstr->cond);
+  buffer_stream_delete(str);
 }
 
 STREAM_VTBL     macro_stream_vtbl = {
     macro_stream_delete, buffer_stream_gets, buffer_stream_rewind
 };
 
-STREAM         *new_macro_stream(
-    STREAM *refstr,
-    BUFFER *buf,
-    MACRO *mac,
-    ARG *args)
-{
-    MACRO_STREAM   *mstr = memcheck(malloc(sizeof(MACRO_STREAM))); {
-        char           *name = memcheck(malloc(strlen(refstr->name) + 32));
+STREAM* new_macro_stream(STREAM* refstr, BUFFER* buf, MACRO* mac, ARG* args) {
+  MACRO_STREAM* mstr =
+      static_cast<MACRO_STREAM*>(memcheck(malloc(sizeof(MACRO_STREAM))));
+  {
+    const size_t namesz = strlen(refstr->name) + 32;
+    char* name = static_cast<char*>(memcheck(malloc(namesz)));
 
-        sprintf(name, "%s:%d->%s", refstr->name, refstr->line, mac->sym.label);
-        buffer_stream_construct(&mstr->bstr, buf, name);
-        free(name);
-    }
+    snprintf(name, namesz, "%s:%d->%s", refstr->name, refstr->line,
+             mac->sym.label.c_str());
+    buffer_stream_construct(&mstr->bstr, buf, name);
+    free(name);
+  }
 
-    mstr->bstr.stream.vtbl = &macro_stream_vtbl;
-    /* Count the args and save their number */
-    for (mstr->nargs = 0; args; args = args->next, mstr->nargs++) ;
-    mstr->cond = last_cond;
-    return &mstr->bstr.stream;
+  mstr->bstr.stream.vtbl = &macro_stream_vtbl;
+  /* Count the args and save their number */
+  for (mstr->nargs = 0; args; args = args->next, mstr->nargs++);
+  mstr->cond = last_cond;
+  return &mstr->bstr.stream;
 }
 
 /* read_body fetches the body of .MACRO, .REPT, .IRP, or .IRPC into a
    BUFFER. */
 
-void read_body(
-    STACK *stack,
-    BUFFER *gb,
-    char *name,
-    int called)
-{
-    int             nest;
+void read_body(STACK* stack, BUFFER* gb, const char* name, int called) {
+  int nest;
 
-    /* Read the stream in until the end marker is hit */
+  /* Read the stream in until the end marker is hit */
 
-    /* Note: "called" says that this body is being pulled from a macro
-       library, and so under no circumstance should it be listed. */
+  /* Note: "called" says that this body is being pulled from a macro
+     library, and so under no circumstance should it be listed. */
 
-    nest = 1;
-    for (;;) {
-        SYMBOL         *op;
-        char           *nextline;
-        char           *cp;
+  nest = 1;
+  for (;;) {
+    SYMBOL* op;
+    char* nextline;
+    char* cp;
 
-        nextline = stack_gets(stack);  /* Now read the line */
-        if (nextline == NULL) {        /* End of file. */
-            report(stack->top, "Macro body not closed\n");
-            break;
-        }
-
-        if (!called && (list_level - 1 + list_md) > 0) {
-            list_flush();
-            list_source(stack->top, nextline);
-        }
-
-        op = get_op(nextline, &cp);
-
-        if (op == NULL) {              /* Not a pseudo-op */
-            buffer_append_line(gb, nextline);
-            continue;
-        }
-        if (op->section->type == SECTION_PSEUDO) {
-            if (op->value == P_MACRO || op->value == P_REPT || op->value == P_IRP || op->value == P_IRPC)
-                nest++;
-
-            if (op->value == P_ENDM || op->value == P_ENDR) {
-                nest--;
-                /* If there's a name on the .ENDM, then */
-                /* close the body early if it matches the definition */
-                if (name && op->value == P_ENDM) {
-                    cp = skipwhite(cp);
-                    if (!EOL(*cp)) {
-                        char           *label = get_symbol(cp, &cp, NULL);
-
-                        if (label) {
-                            if (strcmp(label, name) == 0)
-                                nest = 0;       /* End of macro body. */
-                            free(label);
-                        }
-                    }
-                }
-            }
-
-            if (nest == 0)
-                return;                /* All done. */
-        }
-
-        buffer_append_line(gb, nextline);
+    nextline = stack_gets(stack); /* Now read the line */
+    if (nextline == nullptr) {       /* End of file. */
+      report(stack->top, "Macro body not closed\n");
+      break;
     }
+
+    if (!called && (list_level - 1 + list_md) > 0) {
+      list_flush();
+      list_source(stack->top, nextline);
+    }
+
+    op = get_op(nextline, &cp);
+
+    if (op == nullptr) { /* Not a pseudo-op */
+      buffer_append_line(gb, nextline);
+      continue;
+    }
+    if (op->section->type == SECTION_PSEUDO) {
+      if (op->value == P_MACRO || op->value == P_REPT || op->value == P_IRP ||
+          op->value == P_IRPC)
+        nest++;
+
+      if (op->value == P_ENDM || op->value == P_ENDR) {
+        nest--;
+        /* If there's a name on the .ENDM, then */
+        /* close the body early if it matches the definition */
+        if (name && op->value == P_ENDM) {
+          cp = skipwhite(cp);
+          if (!EOL(*cp)) {
+            char* label = get_symbol(cp, &cp, nullptr);
+
+            if (label) {
+              if (strcmp(label, name) == 0) nest = 0; /* End of macro body. */
+              free(label);
+            }
+          }
+        }
+      }
+
+      if (nest == 0) return; /* All done. */
+    }
+
+    buffer_append_line(gb, nextline);
+  }
 }
 
 /* Diagnostic: dumpmacro dumps a macro definition to stdout.
@@ -143,9 +134,9 @@ void dumpmacro(
 {
     ARG            *arg;
 
-    fprintf(fp, ".MACRO %s ", mac->sym.label);
+    fprintf(fp, ".MACRO %s ", mac->sym.label.c_str());
 
-    for (arg = mac->args; arg != NULL; arg = arg->next) {
+    for (arg = mac->args; arg != nullptr; arg = arg->next) {
         fputs(arg->label, fp);
         if (arg->value) {
             fputc('=', fp);
@@ -174,14 +165,14 @@ MACRO          *defmacro(
     char           *label;
 
     cp = skipwhite(cp);
-    label = get_symbol(cp, &cp, NULL);
-    if (label == NULL) {
+    label = get_symbol(cp, &cp, nullptr);
+    if (label == nullptr) {
         report(stack->top, "Invalid macro definition\n");
-        return NULL;
+        return nullptr;
     }
 
     /* Allow redefinition of a macro; new definition replaces the old. */
-    mac = (MACRO *) lookup_sym(label, &macro_st);
+    mac = reinterpret_cast<MACRO*>(lookup_sym(label, &macro_st));
     if (mac) {
         /* Remove from the symbol table... */
         remove_sym(&mac->sym, &macro_st);
@@ -200,8 +191,8 @@ MACRO          *defmacro(
         arg->locsym = *cp == '?';
         if (arg->locsym) /* special argument flag? */
             cp++;
-        arg->label = get_symbol(cp, &cp, NULL);
-        if (arg->label == NULL) {
+        arg->label = get_symbol(cp, &cp, nullptr);
+        if (arg->label == nullptr) {
             /* It turns out that I have code which is badly formatted
                but which MACRO.SAV assembles.  Sigh.  */
             /* So, just quit defining arguments. */
@@ -210,7 +201,7 @@ MACRO          *defmacro(
             report(str, "Illegal macro argument\n");
             remove_sym(&mac->sym, &macro_st);
             free_macro(mac);
-            return NULL;
+            return nullptr;
 #endif
         }
 
@@ -218,16 +209,16 @@ MACRO          *defmacro(
         if (*cp == '=') {
             /* Default substitution given */
             arg->value = getstring(cp + 1, &cp);
-            if (arg->value == NULL) {
+            if (arg->value == nullptr) {
                 report(stack->top, "Illegal macro argument\n");
                 remove_sym(&mac->sym, &macro_st);
                 free_macro(mac);
-                return NULL;
+                return nullptr;
             }
         }
 
         /* Append to list of arguments */
-        arg->next = NULL;
+        arg->next = nullptr;
         *argtail = arg;
         argtail = &arg->next;
 
@@ -245,11 +236,11 @@ MACRO          *defmacro(
             levelmod = 1;
         }
 
-        read_body(stack, gb, mac->sym.label, called);
+        read_body(stack, gb, mac->sym.label.c_str(), called);
 
         list_level += levelmod;
 
-        if (mac->text != NULL)         /* Discard old macro body */
+        if (mac->text != nullptr)         /* Discard old macro body */
             buffer_free(mac->text);
 
         mac->text = gb;
@@ -265,12 +256,12 @@ MACRO          *defmacro(
 ARG            *new_arg(
     void)
 {
-    ARG            *arg = memcheck(malloc(sizeof(ARG)));
+  ARG            *arg = static_cast<ARG*>(memcheck(malloc(sizeof(ARG))));
 
     arg->locsym = 0;
-    arg->value = NULL;
-    arg->next = NULL;
-    arg->label = NULL;
+    arg->value = nullptr;
+    arg->next = nullptr;
+    arg->label = nullptr;
     return arg;
 }
 
@@ -286,11 +277,11 @@ static void free_args(
         next = arg->next;
         if (arg->label) {
             free(arg->label);
-            arg->label = NULL;
+            arg->label = nullptr;
         }
         if (arg->value) {
             free(arg->value);
-            arg->value = NULL;
+            arg->value = nullptr;
         }
         free(arg);
         arg = next;
@@ -305,11 +296,11 @@ static ARG     *find_arg(
     ARG *arg,
     char *name)
 {
-    for (; arg != NULL; arg = arg->next)
+    for (; arg != nullptr; arg = arg->next)
         if (strcmp(arg->label, name) == 0)
             return arg;
 
-    return NULL;
+    return nullptr;
 }
 
 /* subst_args - given a BUFFER and a list of args, generate a new
@@ -334,7 +325,7 @@ BUFFER         *subst_args(
         char           *next;
 
         if (issym(*in)) {
-            label = get_symbol(in, &next, NULL);
+            label = get_symbol(in, &next, nullptr);
             if (label) {
                 if ((arg = find_arg(args, label))) {
                     /* An apostrophe may appear before or after the symbol. */
@@ -346,7 +337,7 @@ BUFFER         *subst_args(
                         next++;
 
                     /* Copy prior characters */
-                    buffer_appendn(gb, begin, (int) (in - begin));
+                    buffer_appendn(gb, begin, static_cast<int>(in - begin));
                     /* Copy replacement string */
                     buffer_append_line(gb, arg->value);
                     in = begin = next;
@@ -361,7 +352,7 @@ BUFFER         *subst_args(
     }
 
     /* Append the rest of the text */
-    buffer_appendn(gb, begin, (int) (in - begin));
+    buffer_appendn(gb, begin, static_cast<int>(in - begin));
 
     return gb;                         /* Done. */
 }
@@ -391,7 +382,7 @@ void eval_arg(
         /* printf can't do base 2. */
         my_ultoa(word & 0177777, temp, radix);
         free(arg->value);
-        arg->value = memcheck(strdup(temp));
+        arg->value = static_cast<char*>(memcheck(strdup(temp)));
     }
 }
 
@@ -409,8 +400,8 @@ STREAM         *expandmacro(
     STREAM         *str;
     BUFFER         *buf;
 
-    args = NULL;
-    arg = NULL;
+    args = nullptr;
+    arg = nullptr;
 
     /* Parse the arguments */
 
@@ -418,14 +409,14 @@ STREAM         *expandmacro(
         char           *nextcp;
 
         /* Check for named argument */
-        label = get_symbol(cp, &nextcp, NULL);
+        label = get_symbol(cp, &nextcp, nullptr);
         if (label && (nextcp = skipwhite(nextcp), *nextcp == '=') && (macarg = find_arg(mac->args, label))) {
             /* Check if I've already got a value for it */
-            if (find_arg(args, label) != NULL) {
+            if (find_arg(args, label) != nullptr) {
                 report(refstr, "Duplicate submission of keyword " "argument %s\n", label);
                 free(label);
                 free_args(args);
-                return NULL;
+                return nullptr;
             }
 
             arg = new_arg();
@@ -438,16 +429,16 @@ STREAM         *expandmacro(
 
             /* Find correct positional argument */
 
-            for (macarg = mac->args; macarg != NULL; macarg = macarg->next) {
-                if (find_arg(args, macarg->label) == NULL)
+            for (macarg = mac->args; macarg != nullptr; macarg = macarg->next) {
+                if (find_arg(args, macarg->label) == nullptr)
                     break;             /* This is the next positional arg */
             }
 
-            if (macarg == NULL)
+            if (macarg == nullptr)
                 break;                 /* Don't pick up any more arguments. */
 
             arg = new_arg();
-            arg->label = memcheck(strdup(macarg->label));       /* Copy the name */
+            arg->label = static_cast<char*>(memcheck(strdup(macarg->label)));       /* Copy the name */
             arg->value = getstring(cp, &nextcp);
         }
 
@@ -468,21 +459,21 @@ STREAM         *expandmacro(
             locsym = last_locsym;
         last_lsb = lsb;
 
-        for (macarg = mac->args; macarg != NULL; macarg = macarg->next) {
+        for (macarg = mac->args; macarg != nullptr; macarg = macarg->next) {
             arg = find_arg(args, macarg->label);
-            if (arg == NULL) {
+            if (arg == nullptr) {
                 arg = new_arg();
-                arg->label = memcheck(strdup(macarg->label));
+                arg->label = static_cast<char*>(memcheck(strdup(macarg->label)));
                 if (macarg->locsym) {
                     char            temp[32];
 
                     /* Here's where we generate local labels */
-                    sprintf(temp, "%d$", locsym++);
-                    arg->value = memcheck(strdup(temp));
+                    snprintf(temp, sizeof(temp), "%d$", locsym++);
+                    arg->value = static_cast<char*>(memcheck(strdup(temp)));
                 } else if (macarg->value) {
-                    arg->value = memcheck(strdup(macarg->value));
+                  arg->value = static_cast<char*>(memcheck(strdup(macarg->value)));
                 } else
-                    arg->value = memcheck(strdup(""));
+                  arg->value = static_cast<char*>(memcheck(strdup("")));
 
                 arg->next = args;
                 args = arg;
@@ -503,38 +494,36 @@ STREAM         *expandmacro(
 }
 
 
-/* dump_all_macros is a diagnostic function that's currently not
-   used.  I used it while debugging, and I haven't removed it. */
+// dump_all_macros is a diagnostic function that's currently not used.  I used
+// it while debugging, and I haven't removed it.
 
-static void dump_all_macros(
-    void)
-{
-    MACRO          *mac;
-    SYMBOL_ITER     iter;
+static void dump_all_macros [[maybe_unused]] (void) {
+  SYMBOL_ITER iter;
 
-    for (mac = (MACRO *) first_sym(&macro_st, &iter); mac != NULL; mac = (MACRO *) next_sym(&macro_st, &iter)) {
-        dumpmacro(mac, lstfile);
+  for (MACRO* mac = reinterpret_cast<MACRO*>(first_sym(&macro_st, &iter));
+       mac != nullptr;
+       mac = reinterpret_cast<MACRO*>(next_sym(&macro_st, &iter))) {
+    dumpmacro(mac, lstfile);
 
-        printf("\n\n");
-    }
+    printf("\n\n");
+  }
 }
-
 
 /* Allocate a new macro */
 
 MACRO          *new_macro(
     char *label)
 {
-    MACRO          *mac = memcheck(malloc(sizeof(MACRO)));
+  MACRO          *mac = static_cast<MACRO*>(memcheck(malloc(sizeof(MACRO))));
 
     mac->sym.flags = 0;
     mac->sym.label = label;
     mac->sym.stmtno = stmtno;
-    mac->sym.next = NULL;
+    mac->sym.next = nullptr;
     mac->sym.section = &macro_section;
     mac->sym.value = 0;
-    mac->args = NULL;
-    mac->text = NULL;
+    mac->args = nullptr;
+    mac->text = nullptr;
 
     return mac;
 }

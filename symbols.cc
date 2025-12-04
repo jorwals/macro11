@@ -1,4 +1,3 @@
-
 #define SYMBOLS__C
 
 #include <stdlib.h>
@@ -32,20 +31,15 @@ SYMBOL_TABLE    implicit_st;    /* The symbols which may be implicit globals */
 
 /* hash_name hashes a name into a value from 0-HASH_SIZE */
 
-int hash_name(
-    char *label)
-{
-    unsigned        accum = 0;
+int hash_name(const char* label) {
+  unsigned accum = 0;
 
-    while (*label)
-        accum = (accum << 1) ^ *label++;
+  while (*label) accum = (accum << 1) ^ *label++;
 
-    accum %= HASH_SIZE;
+  accum %= HASH_SIZE;
 
-    return accum;
+  return accum;
 }
-
-
 
 /* Diagnostic: symflags returns a char* which gives flags I can use to
    show the context of a symbol. */
@@ -70,29 +64,18 @@ char           *symflags(
 
 /* Allocate a new symbol.  Does not add it to any symbol table. */
 
-static SYMBOL  *new_sym(
-    char *label)
-{
-    SYMBOL         *sym = memcheck(malloc(sizeof(SYMBOL)));
+static SYMBOL* new_sym(const char* label) {
+  SYMBOL* sym = static_cast<SYMBOL*>(memcheck(malloc(sizeof(SYMBOL))));
 
-    sym->label = memcheck(strdup(label));
-    sym->section = NULL;
-    sym->value = 0;
-    sym->flags = 0;
-    return sym;
+  sym->label = static_cast<char*>(memcheck(strdup(label)));
+  sym->section = nullptr;
+  sym->value = 0;
+  sym->flags = 0;
+  return sym;
 }
 
-/* Free a symbol. Does not remove it from any symbol table.  */
-
-void free_sym(
-    SYMBOL *sym)
-{
-    if (sym->label) {
-        free(sym->label);
-        sym->label = NULL;
-    }
-    free(sym);
-}
+// Free a symbol. Does not remove it from any symbol table.
+void free_sym(SYMBOL* sym) { free(sym); }
 
 /* remove_sym removes a symbol from it's symbol table. */
 
@@ -104,9 +87,9 @@ void remove_sym(
                    *symp;
     int             hash;
 
-    hash = hash_name(sym->label);
+    hash = hash_name(sym->label.c_str());
     prevp = &table->hash[hash];
-    while (symp = *prevp, symp != NULL && symp != sym)
+    while (symp = *prevp, symp != nullptr && symp != sym)
         prevp = &symp->next;
 
     if (symp)
@@ -115,24 +98,20 @@ void remove_sym(
 
 /* lookup_sym finds a symbol in a table */
 
-SYMBOL         *lookup_sym(
-    char *label,
-    SYMBOL_TABLE *table)
-{
-    unsigned        hash;
-    SYMBOL         *sym;
+SYMBOL* lookup_sym(const char* label, SYMBOL_TABLE* table) {
+  unsigned hash;
+  SYMBOL* sym;
 
-    hash = hash_name(label);
+  hash = hash_name(label);
 
-    sym = table->hash[hash];
-    while (sym && strcmp(sym->label, label) != 0)
-        sym = sym->next;
+  sym = table->hash[hash];
+  while (sym && strcmp(sym->label.c_str(), label) != 0) sym = sym->next;
 
-    return sym;
+  return sym;
 }
 
 /* next_sym - returns the next symbol from a symbol table.  Must be
-   preceeded by first_sym.  Returns NULL after the last symbol. */
+   preceeded by first_sym.  Returns nullptr after the last symbol. */
 
 SYMBOL         *next_sym(
     SYMBOL_TABLE *table,
@@ -141,9 +120,9 @@ SYMBOL         *next_sym(
     if (iter->current)
         iter->current = iter->current->next;
 
-    while (iter->current == NULL) {
+    while (iter->current == nullptr) {
         if (iter->subscript >= HASH_SIZE)
-            return NULL;               /* No more symbols. */
+            return nullptr;               /* No more symbols. */
         iter->current = table->hash[iter->subscript];
         iter->subscript++;
     }
@@ -159,7 +138,7 @@ SYMBOL         *first_sym(
     SYMBOL_ITER *iter)
 {
     iter->subscript = 0;
-    iter->current = NULL;
+    iter->current = nullptr;
     return next_sym(table, iter);
 }
 
@@ -169,63 +148,59 @@ void add_table(
     SYMBOL *sym,
     SYMBOL_TABLE *table)
 {
-    int             hash = hash_name(sym->label);
+  int hash = hash_name(sym->label.c_str());
 
-    sym->next = table->hash[hash];
-    table->hash[hash] = sym;
+  sym->next = table->hash[hash];
+  table->hash[hash] = sym;
 }
 
 /* add_sym - used throughout to add or update symbols in a symbol
    table.  */
 
-SYMBOL         *add_sym(
-    char *labelraw,
-    unsigned value,
-    unsigned flags,
-    SECTION *section,
-    SYMBOL_TABLE *table)
-{
-    SYMBOL         *sym;
-    char            label[SYMMAX_MAX + 1];      // big size
+SYMBOL* add_sym(const char* labelraw, unsigned value, unsigned flags,
+                SECTION* section, SYMBOL_TABLE* table) {
+  SYMBOL* sym;
+  char label[SYMMAX_MAX + 1];  // big size
 
-    //JH: truncate symbol to SYMMAX
-    strncpy(label, labelraw, symbol_len);
-    label[symbol_len] = 0;
+  // JH: truncate symbol to SYMMAX
+  strncpy(label, labelraw, symbol_len);
+  label[symbol_len] = 0;
 
-    sym = lookup_sym(label, table);
-    if (sym != NULL) {
-        // A symbol registered as "undefined" can be changed.
+  sym = lookup_sym(label, table);
+  if (sym != nullptr) {
+    // A symbol registered as "undefined" can be changed.
 
-        if ((sym->flags & SYMBOLFLAG_UNDEFINED) && !(flags & SYMBOLFLAG_UNDEFINED)) {
-            sym->flags &= ~(SYMBOLFLAG_PERMANENT | SYMBOLFLAG_UNDEFINED);
-        }
-
-        /* Check for compatible definition */
-        else if (sym->section == section && sym->value == value) {
-            sym->flags |= flags;       /* Merge flags quietly */
-            return sym;                /* 's okay */
-        }
-
-        if (!(sym->flags & SYMBOLFLAG_PERMANENT)) {
-            /* permit redefinition */
-            sym->value = value;
-            sym->flags |= flags;
-            sym->section = section;
-            return sym;
-        }
-
-        return NULL;                   /* Bad symbol redefinition */
+    if ((sym->flags & SYMBOLFLAG_UNDEFINED) &&
+        !(flags & SYMBOLFLAG_UNDEFINED)) {
+      sym->flags &= ~(SYMBOLFLAG_PERMANENT | SYMBOLFLAG_UNDEFINED);
     }
 
-    sym = new_sym(label);
-    sym->flags = flags;
-    sym->stmtno = stmtno;
-    sym->section = section;
-    sym->value = value;
+    /* Check for compatible definition */
+    else if (sym->section == section && sym->value == value) {
+      sym->flags |= flags; /* Merge flags quietly */
+      return sym;          /* 's okay */
+    }
 
-    add_table(sym, table);
+    if (!(sym->flags & SYMBOLFLAG_PERMANENT)) {
+      /* permit redefinition */
+      sym->value = value;
+      sym->flags |= flags;
+      sym->section = section;
+      return sym;
+    }
 
-    return sym;
+    return nullptr; // Bad symbol redefinition
+  }
+
+  sym = new_sym(label);
+  sym->flags = flags;
+  sym->stmtno = stmtno;
+  sym->section = section;
+  sym->value = value;
+
+  add_table(sym, table);
+
+  return sym;
 }
 
 /* add_symbols adds all the internal symbols. */
@@ -454,25 +429,21 @@ void add_symbols(
 
     /* FIXME: The CIS instructions are missing! */
 
-    add_sym(current_section->label, 0, 0, current_section, &section_st);
+    add_sym(current_section->label.c_str(), 0, 0, current_section, &section_st);
 }
 
-/* sym_hist is a diagnostic function that prints a histogram of the
-   hash table useage of a symbol table.  I used this to try to tune
-   the hash function for better spread.  It's not used now. */
+// sym_hist is a diagnostic function that prints a histogram of the hash table
+// useage of a symbol table.  I used this to try to tune the hash function for
+// better spread.  It's not used now.
 
-static void sym_hist(
-    SYMBOL_TABLE *st,
-    char *name)
-{
-    int             i;
-    SYMBOL         *sym;
+static void sym_hist [[maybe_unused]] (SYMBOL_TABLE* st, char* name) {
+  int i;
+  SYMBOL* sym;
 
-    fprintf(lstfile, "Histogram for symbol table %s\n", name);
-    for (i = 0; i < 1023; i++) {
-        fprintf(lstfile, "%4d: ", i);
-        for (sym = st->hash[i]; sym != NULL; sym = sym->next)
-            fputc('#', lstfile);
-        fputc('\n', lstfile);
-    }
+  fprintf(lstfile, "Histogram for symbol table %s\n", name);
+  for (i = 0; i < 1023; i++) {
+    fprintf(lstfile, "%4d: ", i);
+    for (sym = st->hash[i]; sym != nullptr; sym = sym->next) fputc('#', lstfile);
+    fputc('\n', lstfile);
+  }
 }

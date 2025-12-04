@@ -11,21 +11,17 @@
 #include "object.h"
 
 
-/* Diagnostic: print an expression tree.  I used this in various
-   places to help me diagnose parse problems, by putting in calls to
-   print_tree when I didn't understand why something wasn't working.
-   This is currently dead code, nothing calls it; but I don't want it
-   to go away. Hopefully the compiler will realize when it's dead, and
-   eliminate it. */
+// Diagnostic: print an expression tree.  I used this in various places to help
+// me diagnose parse problems, by putting in calls to print_tree when I didn't
+// understand why something wasn't working.  This is currently dead code,
+// nothing calls it; but I don't want it to go away. Hopefully the compiler will
+// realize when it's dead, and eliminate it.
 
-static void print_tree(
-    FILE *printfile,
-    EX_TREE *tp,
-    int depth)
-{
-    SYMBOL         *sym;
+static void print_tree
+    [[maybe_unused]] (FILE* printfile, EX_TREE* tp, int depth) {
+  SYMBOL* sym;
 
-    switch (tp->type) {
+  switch (tp->type) {
     case EX_LIT:
         fprintf(printfile, "%o", tp->data.lit & 0177777);
         break;
@@ -33,12 +29,12 @@ static void print_tree(
     case EX_SYM:
     case EX_TEMP_SYM:
         sym = tp->data.symbol;
-        fprintf(printfile, "%s{%s%o:%s}", tp->data.symbol->label, symflags(sym), sym->value,
-                sym->section->label);
+      fprintf(printfile, "%s{%s%o:%s}", tp->data.symbol->label.c_str(), symflags(sym), sym->value,
+                sym->section->label.c_str());
         break;
 
     case EX_UNDEFINED_SYM:
-        fprintf(printfile, "%s{%o:undefined}", tp->data.symbol->label, tp->data.symbol->value);
+        fprintf(printfile, "%s{%o:undefined}", tp->data.symbol->label.c_str(), tp->data.symbol->value);
         break;
 
     case EX_COM:
@@ -117,13 +113,10 @@ static void print_tree(
 
 /* free_tree frees an expression tree. */
 
-void free_tree(
-    EX_TREE *tp)
-{
-    switch (tp->type) {
+void free_tree(EX_TREE* tp) {
+  switch (tp->type) {
     case EX_UNDEFINED_SYM:
     case EX_TEMP_SYM:
-        free(tp->data.symbol->label);
         free(tp->data.symbol);
     case EX_LIT:
     case EX_SYM:
@@ -158,27 +151,24 @@ void free_tree(
 /* new_temp_sym allocates a new EX_TREE entry of type "TEMPORARY
    SYMBOL" (slight semantic difference from "UNDEFINED"). */
 
-static EX_TREE *new_temp_sym(
-    char *label,
-    SECTION *section,
-    unsigned value)
-{
-    SYMBOL         *sym;
-    EX_TREE        *tp;
+static EX_TREE* new_temp_sym(const char* label, SECTION* section,
+                             unsigned value) {
+  SYMBOL* sym;
+  EX_TREE* tp;
 
-    sym = memcheck(malloc(sizeof(SYMBOL)));
-    sym->label = memcheck(strdup(label));
-    sym->flags = 0;
-    sym->stmtno = stmtno;
-    sym->next = NULL;
-    sym->section = section;
-    sym->value = value;
+  sym = static_cast<SYMBOL*>(memcheck(malloc(sizeof(SYMBOL))));
+  sym->label = label;
+  sym->flags = 0;
+  sym->stmtno = stmtno;
+  sym->next = nullptr;
+  sym->section = section;
+  sym->value = value;
 
-    tp = new_ex_tree();
-    tp->type = EX_TEMP_SYM;
-    tp->data.symbol = sym;
+  tp = new_ex_tree();
+  tp->type = EX_TEMP_SYM;
+  tp->data.symbol = sym;
 
-    return tp;
+  return tp;
 }
 
 #define RELTYPE(tp) (((tp)->type == EX_SYM || (tp)->type == EX_TEMP_SYM) && \
@@ -216,10 +206,11 @@ EX_TREE        *evaluate(
                     change = 1;
 
                 if (change) {
-                    res = new_temp_sym(tp->data.symbol->label, tp->data.symbol->section,
-                                       tp->data.symbol->value);
-                    res->type = EX_UNDEFINED_SYM;
-                    break;
+                  res = new_temp_sym(tp->data.symbol->label.c_str(),
+                                     tp->data.symbol->section,
+                                     tp->data.symbol->value);
+                  res->type = EX_UNDEFINED_SYM;
+                  break;
                 }
             }
 
@@ -234,7 +225,7 @@ EX_TREE        *evaluate(
             /* Make a temp copy of any reference to "." since it might
                change as complex relocatable expressions are written out
              */
-            if (strcmp(sym->label, ".") == 0) {
+            if (strcmp(sym->label.c_str(), ".") == 0) {
                 res = new_temp_sym(".", sym->section, sym->value);
                 break;
             }
@@ -255,7 +246,8 @@ EX_TREE        *evaluate(
     case EX_TEMP_SYM:
     case EX_UNDEFINED_SYM:
         /* Copy temp and undefined symbols */
-        res = new_temp_sym(tp->data.symbol->label, tp->data.symbol->section, tp->data.symbol->value);
+        res = new_temp_sym(tp->data.symbol->label.c_str(),
+                           tp->data.symbol->section, tp->data.symbol->value);
         res->type = tp->type;
         break;
 
@@ -280,13 +272,16 @@ EX_TREE        *evaluate(
         tp = evaluate(tp->data.child.left, undef);
         if (tp->type == EX_LIT) {
             /* negate literal */
-            res = new_ex_lit((unsigned) -(int) tp->data.lit);
+            res = new_ex_lit(
+                static_cast<unsigned>(-static_cast<int>(tp->data.lit)));
             free_tree(tp);
         } else if (tp->type == EX_SYM || tp->type == EX_TEMP_SYM) {
             /* Make a temp sym with the negative value of the given
                sym (this works for symbols within relocatable sections
                too) */
-            res = new_temp_sym("*TEMP", tp->data.symbol->section, (unsigned) -(int) tp->data.symbol->value);
+            res = new_temp_sym("*TEMP", tp->data.symbol->section,
+                               static_cast<unsigned>(
+                                   -static_cast<int>(tp->data.symbol->value)));
             res->cp = tp->cp;
             free_tree(tp);
         } else {
@@ -661,14 +656,11 @@ EX_TREE        *evaluate(
 
 /* Allocate an EX_TREE */
 
-EX_TREE        *new_ex_tree(
-    void)
-{
-    EX_TREE        *tr = memcheck(malloc(sizeof(EX_TREE)));
+EX_TREE* new_ex_tree(void) {
+  EX_TREE* tr = static_cast<EX_TREE*>(memcheck(malloc(sizeof(EX_TREE))));
 
-    return tr;
+  return tr;
 }
-
 
 /* Create an EX_TREE representing a parse error */
 

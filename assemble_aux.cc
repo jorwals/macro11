@@ -21,21 +21,17 @@
 
 /* Allocate a new section */
 
-SECTION        *new_section(
-    void)
-{
-    SECTION        *sect = memcheck(malloc(sizeof(SECTION)));
+SECTION* new_section(void) {
+  SECTION* sect = static_cast<SECTION*>(memcheck(malloc(sizeof(SECTION))));
 
-    sect->flags = 0;
-    sect->size = 0;
-    sect->pc = 0;
-    sect->type = 0;
-    sect->sector = 0;
-    sect->label = NULL;
-    return sect;
+  sect->flags = 0;
+  sect->size = 0;
+  sect->pc = 0;
+  sect->type = 0;
+  sect->sector = 0;
+  sect->label.clear();
+  return sect;
 }
-
-
 
 /* This is called by places that are about to store some code, or
    which want to manually update DOT. */
@@ -46,9 +42,10 @@ void change_dot(
 {
     if (size > 0) {
         if (last_dot_section != current_pc->section) {
-            text_define_location(tr, current_pc->section->label, &current_pc->value);
-            last_dot_section = current_pc->section;
-            last_dot_addr = current_pc->value;
+          text_define_location(tr, current_pc->section->label.c_str(),
+                               &current_pc->value);
+          last_dot_section = current_pc->section;
+          last_dot_addr = current_pc->value;
         }
         if (last_dot_addr != current_pc->value) {
             text_modify_location(tr, &current_pc->value);
@@ -91,28 +88,19 @@ static int store_displaced_word(
     return text_displaced_word(tr, &DOT, size, word);
 }
 
-static int store_global_displaced_offset_word(
-    STREAM *str,
-    TEXT_RLD *tr,
-    int size,
-    unsigned word,
-    char *global)
-{
-    change_dot(tr, size);
-    list_word(str, DOT, word, size, "G");
-    return text_global_displaced_offset_word(tr, &DOT, size, word, global);
+static int store_global_displaced_offset_word(STREAM* str, TEXT_RLD* tr,
+                                              int size, unsigned word,
+                                              const char* global) {
+  change_dot(tr, size);
+  list_word(str, DOT, word, size, "G");
+  return text_global_displaced_offset_word(tr, &DOT, size, word, global);
 }
 
-static int store_global_offset_word(
-    STREAM *str,
-    TEXT_RLD *tr,
-    int size,
-    unsigned word,
-    char *global)
-{
-    change_dot(tr, size);
-    list_word(str, DOT, word, size, "G");
-    return text_global_offset_word(tr, &DOT, size, word, global);
+static int store_global_offset_word(STREAM* str, TEXT_RLD* tr, int size,
+                                    unsigned word, const char* global) {
+  change_dot(tr, size);
+  list_word(str, DOT, word, size, "G");
+  return text_global_offset_word(tr, &DOT, size, word, global);
 }
 
 static int store_internal_word(
@@ -126,28 +114,19 @@ static int store_internal_word(
     return text_internal_word(tr, &DOT, size, word);
 }
 
-static int store_psect_displaced_offset_word(
-    STREAM *str,
-    TEXT_RLD *tr,
-    int size,
-    unsigned word,
-    char *name)
-{
-    change_dot(tr, size);
-    list_word(str, DOT, word, size, "");
-    return text_psect_displaced_offset_word(tr, &DOT, size, word, name);
+static int store_psect_displaced_offset_word(STREAM* str, TEXT_RLD* tr,
+                                             int size, unsigned word,
+                                             const char* name) {
+  change_dot(tr, size);
+  list_word(str, DOT, word, size, "");
+  return text_psect_displaced_offset_word(tr, &DOT, size, word, name);
 }
 
-static int store_psect_offset_word(
-    STREAM *str,
-    TEXT_RLD *tr,
-    int size,
-    unsigned word,
-    char *name)
-{
-    change_dot(tr, size);
-    list_word(str, DOT, word, size, "");
-    return text_psect_offset_word(tr, &DOT, size, word, name);
+static int store_psect_offset_word(STREAM* str, TEXT_RLD* tr, int size,
+                                   unsigned word, const char* name) {
+  change_dot(tr, size);
+  list_word(str, DOT, word, size, "");
+  return text_psect_offset_word(tr, &DOT, size, word, name);
 }
 
 int store_limits(
@@ -168,7 +147,7 @@ void free_addr_mode(
 {
     if (mode->offset)
         free_tree(mode->offset);
-    mode->offset = NULL;
+    mode->offset = nullptr;
 }
 
 /* Get the register indicated by the expression */
@@ -209,11 +188,9 @@ void implicit_gbl(
     switch (value->type) {
     case EX_UNDEFINED_SYM:
         {
-            SYMBOL         *sym;
-
-            if (!(value->data.symbol->flags & SYMBOLFLAG_LOCAL)) {      /* Unless it's a
-                                                                           local symbol, */
-                sym = add_sym(value->data.symbol->label, 0, SYMBOLFLAG_GLOBAL, &absolute_section, &implicit_st);
+            if (!(value->data.symbol->flags & SYMBOLFLAG_LOCAL)) {  // Unless it's a local symbol,
+              add_sym(value->data.symbol->label.c_str(), 0, SYMBOLFLAG_GLOBAL,
+                      &absolute_section, &implicit_st);
             }
         }
         break;
@@ -250,13 +227,13 @@ void migrate_implicit(
     SYMBOL         *isym,
                    *sym;
 
-    for (isym = first_sym(&implicit_st, &iter); isym != NULL; isym = next_sym(&implicit_st, &iter)) {
-        sym = lookup_sym(isym->label, &symbol_st);
-        if (sym)
-            continue;                  // It's already in there.  Great.
-        sym = add_sym(isym->label, isym->value, isym->flags, isym->section, &symbol_st);
-        // Just one other thing - migrate the stmtno
-        sym->stmtno = isym->stmtno;
+    for (isym = first_sym(&implicit_st, &iter); isym != nullptr; isym = next_sym(&implicit_st, &iter)) {
+      sym = lookup_sym(isym->label.c_str(), &symbol_st);
+      if (sym) continue;  // It's already in there.  Great.
+      sym = add_sym(isym->label.c_str(), isym->value, isym->flags,
+                    isym->section, &symbol_st);
+      // Just one other thing - migrate the stmtno
+      sym->stmtno = isym->stmtno;
     }
 }
 
@@ -297,7 +274,7 @@ int express_sym_offset(
         if ((left->type != EX_SYM && left->type != EX_UNDEFINED_SYM) || right->type != EX_LIT)
             return 0;                  /* Failed. */
         *sym = left->data.symbol;
-        *offset = (unsigned) -(int) (right->data.lit);
+        *offset = static_cast<unsigned>(-static_cast<int>(right->data.lit));
         return 1;
     }
 
@@ -323,7 +300,7 @@ int complex_tree(
             SYMBOL         *sym = tree->data.symbol;
 
             if ((sym->flags & (SYMBOLFLAG_GLOBAL | SYMBOLFLAG_DEFINITION)) == SYMBOLFLAG_GLOBAL) {
-                text_complex_global(tx, sym->label);
+              text_complex_global(tx, sym->label.c_str());
             } else {
                 text_complex_psect(tx, sym->section->sector, sym->value);
             }
@@ -461,7 +438,7 @@ void mode_extension(
 
     /* Also frees the mode. */
 
-    if (value == NULL) {
+    if (value == nullptr) {
         free_addr_mode(mode);
         return;
     }
@@ -478,9 +455,9 @@ void mode_extension(
             /* Reference to a global symbol. */
             /* Global symbol plus offset */
             if (mode->rel)
-                store_global_displaced_offset_word(str, tr, 2, offset, sym->label);
+              store_global_displaced_offset_word(str, tr, 2, offset, sym->label.c_str());
             else
-                store_global_offset_word(str, tr, 2, offset, sym->label);
+              store_global_offset_word(str, tr, 2, offset, sym->label.c_str());
         } else {
             /* Relative to non-external symbol. */
             if (current_pc->section == sym->section) {
@@ -493,9 +470,9 @@ void mode_extension(
             } else {
                 /* In a different section */
                 if (mode->rel)
-                    store_psect_displaced_offset_word(str, tr, 2, sym->value + offset, sym->section->label);
+                  store_psect_displaced_offset_word(str, tr, 2, sym->value + offset, sym->section->label.c_str());
                 else
-                    store_psect_offset_word(str, tr, 2, sym->value + offset, sym->section->label);
+                  store_psect_offset_word(str, tr, 2, sym->value + offset, sym->section->label.c_str());
             }
         }
     } else {
@@ -510,46 +487,46 @@ void mode_extension(
     free_addr_mode(mode);
 }
 
-/* eval_defined - take an EX_TREE and returns TRUE if the tree
-   represents "defined" symbols. */
+// eval_defined - take an EX_TREE and returns TRUE if the tree represents
+// "defined" symbols.
 
-int eval_defined(
-    EX_TREE *value)
-{
-    switch (value->type) {
+bool eval_defined(EX_TREE* value) {
+  switch (value->type) {
     case EX_LIT:
-        return 1;
+      return true;
     case EX_SYM:
-        return 1;
+      return true;
     case EX_UNDEFINED_SYM:
-        return 0;
+      return false;
     case EX_AND:
-        return eval_defined(value->data.child.left) && eval_defined(value->data.child.right);
+      return eval_defined(value->data.child.left) &&
+             eval_defined(value->data.child.right);
     case EX_OR:
-        return eval_defined(value->data.child.left) || eval_defined(value->data.child.right);
+      return eval_defined(value->data.child.left) ||
+             eval_defined(value->data.child.right);
     default:
-        return 0;
-    }
+      return false;
+  }
 }
 
-/* eval_undefined - take an EX_TREE and returns TRUE if it represents
-   "undefined" symbols. */
+// eval_undefined - take an EX_TREE and returns TRUE if it represents
+// "undefined" symbols.
 
-int eval_undefined(
-    EX_TREE *value)
-{
-    switch (value->type) {
+bool eval_undefined(EX_TREE* value) {
+  switch (value->type) {
     case EX_UNDEFINED_SYM:
-        return 1;
+      return true;
     case EX_SYM:
-        return 0;
+      return false;
     case EX_AND:
-        return eval_undefined(value->data.child.left) && eval_undefined(value->data.child.right);
+      return eval_undefined(value->data.child.left) &&
+             eval_undefined(value->data.child.right);
     case EX_OR:
-        return eval_undefined(value->data.child.left) || eval_undefined(value->data.child.right);
+      return eval_undefined(value->data.child.left) ||
+             eval_undefined(value->data.child.right);
     default:
-        return 0;
-    }
+      return false;
+  }
 }
 
 /* push_cond - a new conditional (.IF) block has been activated.  Push
@@ -562,7 +539,7 @@ void push_cond(
     last_cond++;
     assert(last_cond < MAX_CONDS);
     conds[last_cond].ok = ok;
-    conds[last_cond].file = memcheck(strdup(str->name));
+    conds[last_cond].file = static_cast<char*>(memcheck(strdup(str->name)));
     conds[last_cond].line = str->line;
 }
 
@@ -581,19 +558,15 @@ void pop_cond(
 
 /* go_section - sets current_pc to a new program section */
 
-void go_section(
-    TEXT_RLD *tr,
-    SECTION *sect)
-{
-    if (current_pc->section == sect)
-        return;                        /* This is too easy */
+void go_section(TEXT_RLD* tr, SECTION* sect) {
+  if (current_pc->section == sect) return; /* This is too easy */
 
-    /* save current PC value for old section */
-    current_pc->section->pc = DOT;
+  /* save current PC value for old section */
+  current_pc->section->pc = DOT;
 
-    /* Set current section and PC value */
-    current_pc->section = sect;
-    DOT = sect->pc;
+  /* Set current section and PC value */
+  current_pc->section = sect;
+  DOT = sect->pc;
 }
 
 /*
@@ -618,9 +591,9 @@ void store_value(
         store_complex(stack->top, tr, size, value);
     } else {
         if ((sym->flags & (SYMBOLFLAG_GLOBAL | SYMBOLFLAG_DEFINITION)) == SYMBOLFLAG_GLOBAL) {
-            store_global_offset_word(stack->top, tr, size, sym->value + offset, sym->label);
+          store_global_offset_word(stack->top, tr, size, sym->value + offset, sym->label.c_str());
         } else if (sym->section != current_pc->section) {
-            store_psect_offset_word(stack->top, tr, size, sym->value + offset, sym->section->label);
+          store_psect_offset_word(stack->top, tr, size, sym->value + offset, sym->section->label.c_str());
         } else {
             store_internal_word(stack->top, tr, size, sym->value + offset);
         }
@@ -693,7 +666,7 @@ void write_globals(
     SYMBOL_ITER     sym_iter;
     int             isect;
 
-    if (obj == NULL)
+    if (obj == nullptr)
         return;                        /* Nothing to do if no OBJ file. */
 
     gsd_init(&gsd, obj);
@@ -709,14 +682,14 @@ void write_globals(
     for (isect = 0; isect < sector; isect++) {
         psect = sections[isect];
 
-        gsd_psect(&gsd, psect->label, psect->flags, psect->size);
+        gsd_psect(&gsd, psect->label.c_str(), psect->flags, psect->size);
         psect->sector = isect;         /* Assign it a sector */
         psect->pc = 0;                 /* Reset it's PC for second pass */
 
         sym = first_sym(&symbol_st, &sym_iter);
         while (sym) {
             if ((sym->flags & SYMBOLFLAG_GLOBAL) && sym->section == psect) {
-                gsd_global(&gsd, sym->label,
+              gsd_global(&gsd, sym->label.c_str(),
                            (sym->
                             flags & SYMBOLFLAG_DEFINITION ? GLOBAL_DEF : 0) | ((sym->
                                                                                 flags & SYMBOLFLAG_WEAK) ?
@@ -737,9 +710,9 @@ void write_globals(
         unsigned        offset;
 
         if (!express_sym_offset(xfer_address, &sym, &offset)) {
-            report(NULL, "Illegal program transfer address\n");
+            report(nullptr, "Illegal program transfer address\n");
         } else {
-            gsd_xfer(&gsd, sym->section->label, sym->value + offset);
+          gsd_xfer(&gsd, sym->section->label.c_str(), sym->value + offset);
         }
     }
 

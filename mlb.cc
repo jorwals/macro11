@@ -65,59 +65,55 @@ static int compare_position(
     const void *arg1,
     const void *arg2)
 {
-    const char     *c1 = arg1,
-            *c2 = arg2;
+  const char *c1 = static_cast<const char*>(arg1),
+             *c2 = static_cast<const char*>(arg2);
 
-    if (BYTEPOS(c1) < BYTEPOS(c2))
-        return -1;
-    if (BYTEPOS(c1) > BYTEPOS(c2))
-        return 1;
-    return 0;
+  if (BYTEPOS(c1) < BYTEPOS(c2)) return -1;
+  if (BYTEPOS(c1) > BYTEPOS(c2)) return 1;
+  return 0;
 }
 
 
 /* trim removes trailing blanks from a string. */
-static void trim(
-    char *buf)
-{
-    char           *cp = buf + strlen(buf);
-
-    while (--cp >= buf && *cp == ' ')
-        *cp = 0;
+void trim(std::string& buf) {
+  size_t i = buf.find_last_not_of(' ');
+  if (i == buf.npos) {
+    buf.clear();
+  } else if (i + 1 < buf.length()) {
+    buf.resize(i + 1);
+  }
 }
 
-/* mlb_open opens a file which is given to be a macro library. */
-/* Returns NULL on failure. */
+// mlb_open opens a file which is given to be a macro library.  Returns nullptr on
+// failure.
+MLB* mlb_open(const char* name) {
+  MLB* mlb = static_cast<MLB*>(memcheck(malloc(sizeof(MLB))));
+  char* buff;
+  unsigned entsize;
+  unsigned nr_entries;
+  unsigned start_block;
+  int i;
 
-MLB            *mlb_open(
-    char *name)
-{
-    MLB            *mlb = memcheck(malloc(sizeof(MLB)));
-    char           *buff;
-    unsigned        entsize;
-    unsigned        nr_entries;
-    unsigned        start_block;
-    int             i;
+  mlb->directory = nullptr;
 
-    mlb->directory = NULL;
+  mlb->fp = fopen(name, "rb");
+  if (mlb->fp == nullptr) {
+    mlb_close(mlb);
+    return nullptr;
+  }
 
-    mlb->fp = fopen(name, "rb");
-    if (mlb->fp == NULL) {
-        mlb_close(mlb);
-        return NULL;
-    }
+  buff = static_cast<char*>(
+      memcheck(malloc(044))); /* Size of MLB library header */
 
-    buff = memcheck(malloc(044));      /* Size of MLB library header */
-
-    if (fread(buff, 1, 044, mlb->fp) < 044) {
-        mlb_close(mlb);
-        free(buff);
-        return NULL;
-    }
+  if (fread(buff, 1, 044, mlb->fp) < 044) {
+    mlb_close(mlb);
+    free(buff);
+    return nullptr;
+  }
 
     if (WORD(buff) != 01001) {         /* Is this really a macro library? */
         mlb_close(mlb);                /* Nope. */
-        return NULL;
+        return nullptr;
     }
 
     entsize = WORD(buff + 032);        /* The size of each macro directory
@@ -129,14 +125,14 @@ MLB            *mlb_open(
     free(buff);                        /* Done with that header. */
 
     /* Allocate a buffer for the disk directory */
-    buff = memcheck(malloc(nr_entries * entsize));
+    buff = static_cast<char*>(memcheck(malloc(nr_entries * entsize)));
     fseek(mlb->fp, start_block * 512, SEEK_SET);        /* Go to the directory */
 
     /* Read the disk directory */
     if (fread(buff, entsize, nr_entries, mlb->fp) < nr_entries) {
         mlb_close(mlb);                /* Sorry, read error. */
         free(buff);
-        return NULL;
+        return nullptr;
     }
 
     /* Shift occupied directory entries to the front of the array
@@ -172,23 +168,22 @@ MLB            *mlb_open(
         qsort(buff, i, entsize, compare_position);
 
         /* Now, allocate my in-memory directory */
-        mlb->directory = memcheck(malloc(sizeof(MLBENT) * mlb->nentries));
+        mlb->directory = static_cast<MLBENT*>(
+            memcheck(malloc(sizeof(MLBENT) * mlb->nentries)));
         memset(mlb->directory, 0, sizeof(MLBENT) * mlb->nentries);
 
         /* Build in-memory directory */
         for (j = 0; j < i; j++) {
-            char            radname[16];
+            std::string radname;
             char           *ent;
 
             ent = buff + (j * entsize);
 
-            unrad50(WORD(ent), radname);
-            unrad50(WORD(ent + 2), radname + 3);
-            radname[6] = 0;
-
+            radname = unrad50(WORD(ent));
+            radname += unrad50(WORD(ent + 2));
             trim(radname);
 
-            mlb->directory[j].label = memcheck(strdup(radname));
+            mlb->directory[j].label = radname;
             mlb->directory[j].position = BYTEPOS(ent);
             if (j < i - 1) {
                 mlb->directory[j].length = BYTEPOS(ent + entsize) - BYTEPOS(ent);
@@ -217,67 +212,54 @@ MLB            *mlb_open(
 }
 
 /* mlb_close discards MLB and closes the file. */
-void mlb_close(
-    MLB *mlb)
-{
-    if (mlb) {
-        int             i;
-
-        if (mlb->directory) {
-            for (i = 0; i < mlb->nentries; i++)
-                if (mlb->directory[i].label)
-                    free(mlb->directory[i].label);
-            free(mlb->directory);
-        }
-        if (mlb->fp)
-            fclose(mlb->fp);
-
-        free(mlb);
-    }
+void mlb_close(MLB* mlb) {
+  if (mlb) {
+    if (mlb->directory) free(mlb->directory);
+    if (mlb->fp) fclose(mlb->fp);
+    free(mlb);
+  }
 }
 
-/* mlb_entry returns a BUFFER containing the specified entry from the
-   macro library, or NULL if not found. */
+// mlb_entry returns a BUFFER containing the specified entry from the macro
+// library, or nullptr if not found.
+BUFFER* mlb_entry(MLB* mlb, std::string_view name) {
+  int i;
+  MLBENT* ent;
+  BUFFER* buf;
+  char* bp;
+  int c;
 
-BUFFER         *mlb_entry(
-    MLB *mlb,
-    char *name)
-{
-    int             i;
-    MLBENT         *ent;
-    BUFFER         *buf;
-    char           *bp;
-    int             c;
+  for (i = 0; i < mlb->nentries; i++) {
+    ent = &mlb->directory[i];
+    if (mlb->directory[i].label == name) break;
+  }
 
-    for (i = 0; i < mlb->nentries; i++) {
-        ent = &mlb->directory[i];
-        if (strcmp(mlb->directory[i].label, name) == 0)
-            break;
-    }
+  if (i >= mlb->nentries) return nullptr;
 
-    if (i >= mlb->nentries)
-        return NULL;
+  // Allocate a buffer to hold the text
+  buf = new_buffer();
+  buffer_resize(buf, ent->length + 1); // Make it large enough
+  bp = buf->buffer;
 
-    /* Allocate a buffer to hold the text */
-    buf = new_buffer();
-    buffer_resize(buf, ent->length + 1);        /* Make it large enough */
-    bp = buf->buffer;
+  fseek(mlb->fp, ent->position, SEEK_SET);
 
-    fseek(mlb->fp, ent->position, SEEK_SET);
+  for (i = 0; i < ent->length; i++) {
+    // Get macro byte
+    c = fgetc(mlb->fp);
+    // If it's a carriage return or 0, discard it.
+    if (c == '\r' || c == 0) continue;
+    *bp++ = c;
+  }
+  *bp++ = 0; // Store trailing 0 delim
 
-    for (i = 0; i < ent->length; i++) {
-        c = fgetc(mlb->fp);            /* Get macro byte */
-        if (c == '\r' || c == 0)       /* If it's a carriage return or 0,
-                                          discard it. */
-            continue;
-        *bp++ = c;
-    }
-    *bp++ = 0;                         /* Store trailing 0 delim */
+  // Now resize that buffer to the length actually read.
+  buffer_resize(buf, static_cast<int>(bp - buf->buffer));
 
-    /* Now resize that buffer to the length actually read. */
-    buffer_resize(buf, (int) (bp - buf->buffer));
+  return buf;
+}
 
-    return buf;
+BUFFER* mlb_entry(MLB* mlb, const char* name) {
+  return mlb_entry(mlb, {name, strlen(name)});
 }
 
 /* mlb_extract - walk thru a macro library and store it's contents
@@ -290,21 +272,19 @@ BUFFER         *mlb_entry(
    in the file system from thence forward.
 */
 
-void mlb_extract(
-    MLB *mlb)
-{
-    int             i;
-    FILE           *fp;
-    BUFFER         *buf;
+void mlb_extract(MLB* mlb) {
+  int i;
+  FILE* fp;
+  BUFFER* buf;
 
-    for (i = 0; i < mlb->nentries; i++) {
-        char            name[32];
+  for (i = 0; i < mlb->nentries; i++) {
+    char name[32];
 
-        buf = mlb_entry(mlb, mlb->directory[i].label);
-        sprintf(name, "%s.MAC", mlb->directory[i].label);
-        fp = fopen(name, "w");
-        fwrite(buf->buffer, 1, buf->length, fp);
-        fclose(fp);
-        buffer_free(buf);
-    }
+    buf = mlb_entry(mlb, mlb->directory[i].label.c_str());
+    snprintf(name, sizeof(name), "%s.MAC", mlb->directory[i].label.c_str());
+    fp = fopen(name, "w");
+    fwrite(buf->buffer, 1, buf->length, fp);
+    fclose(fp);
+    buffer_free(buf);
+  }
 }

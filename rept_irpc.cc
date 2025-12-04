@@ -38,11 +38,11 @@ char           *rept_stream_gets(
     char           *cp;
 
     for (;;) {
-        if ((cp = buffer_stream_gets(str)) != NULL)
+        if ((cp = buffer_stream_gets(str)) != nullptr)
             return cp;
 
         if (--rstr->count <= 0)
-            return NULL;
+            return nullptr;
 
         buffer_stream_rewind(str);
     }
@@ -81,7 +81,7 @@ STREAM         *expand_rept(
     if (value->type != EX_LIT) {
         report(stack->top, ".REPT value must be constant\n");
         free_tree(value);
-        return NULL;
+        return nullptr;
     }
 
     gb = new_buffer();
@@ -92,16 +92,19 @@ STREAM         *expand_rept(
         levelmod = 1;
     }
 
-    read_body(stack, gb, NULL, FALSE);
+    read_body(stack, gb, nullptr, FALSE);
 
     list_level += levelmod;
 
-    rstr = memcheck(malloc(sizeof(REPT_STREAM))); {
-        char           *name = memcheck(malloc(strlen(stack->top->name) + 32));
+    rstr = static_cast<REPT_STREAM*>(memcheck(malloc(sizeof(REPT_STREAM))));
+    {
+      const size_t namesz = strlen(stack->top->name) + 32;
+      char* name = static_cast<char*>(memcheck(malloc(namesz)));
 
-        sprintf(name, "%s:%d->.REPT", stack->top->name, stack->top->line);
-        buffer_stream_construct(&rstr->bstr, gb, name);
-        free(name);
+      snprintf(name, namesz, "%s:%d->.REPT", stack->top->name,
+               stack->top->line);
+      buffer_stream_construct(&rstr->bstr, gb, name);
+      free(name);
     }
 
     rstr->count = value->data.lit;
@@ -139,16 +142,16 @@ char           *irp_stream_gets(
     ARG            *arg;
 
     for (;;) {
-        if ((cp = buffer_stream_gets(str)) != NULL)
+        if ((cp = buffer_stream_gets(str)) != nullptr)
             return cp;
 
         cp = istr->items + istr->offset;
 
         if (!*cp)
-            return NULL;               /* No more items.  EOF. */
+            return nullptr;               /* No more items.  EOF. */
 
         arg = new_arg();
-        arg->next = NULL;
+        arg->next = nullptr;
         arg->locsym = 0;
         arg->label = istr->label;
         arg->value = getstring(cp, &cp);
@@ -197,10 +200,10 @@ STREAM         *expand_irp(
     int             levelmod = 0;
     IRP_STREAM     *str;
 
-    label = get_symbol(cp, &cp, NULL);
+    label = get_symbol(cp, &cp, nullptr);
     if (!label) {
         report(stack->top, "Illegal .IRP syntax\n");
-        return NULL;
+        return nullptr;
     }
 
     cp = skipdelim(cp);
@@ -209,7 +212,7 @@ STREAM         *expand_irp(
     if (!items) {
         report(stack->top, "Illegal .IRP syntax\n");
         free(label);
-        return NULL;
+        return nullptr;
     }
 
     gb = new_buffer();
@@ -220,16 +223,18 @@ STREAM         *expand_irp(
         levelmod++;
     }
 
-    read_body(stack, gb, NULL, FALSE);
+    read_body(stack, gb, nullptr, FALSE);
 
     list_level += levelmod;
 
-    str = memcheck(malloc(sizeof(IRP_STREAM))); {
-        char           *name = memcheck(malloc(strlen(stack->top->name) + 32));
+    str = static_cast<IRP_STREAM*>(memcheck(malloc(sizeof(IRP_STREAM))));
+    {
+      const size_t namesz = strlen(stack->top->name) + 32;
+      char* name = static_cast<char*>(memcheck(malloc(namesz)));
 
-        sprintf(name, "%s:%d->.IRP", stack->top->name, stack->top->line);
-        buffer_stream_construct(&str->bstr, NULL, name);
-        free(name);
+      snprintf(name, namesz, "%s:%d->.IRP", stack->top->name, stack->top->line);
+      buffer_stream_construct(&str->bstr, nullptr, name);
+      free(name);
     }
 
     str->bstr.stream.vtbl = &irp_stream_vtbl;
@@ -268,19 +273,19 @@ char           *irpc_stream_gets(
     ARG            *arg;
 
     for (;;) {
-        if ((cp = buffer_stream_gets(str)) != NULL)
+        if ((cp = buffer_stream_gets(str)) != nullptr)
             return cp;
 
         cp = istr->items + istr->offset;
 
         if (!*cp)
-            return NULL;               /* No more items.  EOF. */
+            return nullptr;               /* No more items.  EOF. */
 
         arg = new_arg();
-        arg->next = NULL;
+        arg->next = nullptr;
         arg->locsym = 0;
         arg->label = istr->label;
-        arg->value = memcheck(malloc(2));
+        arg->value = static_cast<char*>(memcheck(malloc(2)));
         arg->value[0] = *cp++;
         arg->value[1] = 0;
         istr->offset = (int) (cp - istr->items);
@@ -325,10 +330,10 @@ STREAM         *expand_irpc(
     int             levelmod = 0;
     IRPC_STREAM    *str;
 
-    label = get_symbol(cp, &cp, NULL);
+    label = get_symbol(cp, &cp, nullptr);
     if (!label) {
         report(stack->top, "Illegal .IRPC syntax\n");
-        return NULL;
+        return nullptr;
     }
 
     cp = skipdelim(cp);
@@ -337,7 +342,7 @@ STREAM         *expand_irpc(
     if (!items) {
         report(stack->top, "Illegal .IRPC syntax\n");
         free(label);
-        return NULL;
+        return nullptr;
     }
 
     gb = new_buffer();
@@ -348,16 +353,20 @@ STREAM         *expand_irpc(
         levelmod++;
     }
 
-    read_body(stack, gb, NULL, FALSE);
+    read_body(stack, gb, nullptr, FALSE);
 
     list_level += levelmod;
 
-    str = memcheck(malloc(sizeof(IRPC_STREAM))); {
-        char           *name = memcheck(malloc(strlen(stack->top->name) + 32));
+    str = static_cast<IRPC_STREAM*>(memcheck(malloc(sizeof(IRPC_STREAM))));
+    {
+      const size_t namesz = strlen(stack->top->name) + 32;
+      char* name =
+          static_cast<char*>(memcheck(malloc(namesz)));
 
-        sprintf(name, "%s:%d->.IRPC", stack->top->name, stack->top->line);
-        buffer_stream_construct(&str->bstr, NULL, name);
-        free(name);
+      snprintf(name, namesz, "%s:%d->.IRPC", stack->top->name,
+               stack->top->line);
+      buffer_stream_construct(&str->bstr, nullptr, name);
+      free(name);
     }
 
     str->bstr.stream.vtbl = &irpc_stream_vtbl;

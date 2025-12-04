@@ -26,46 +26,26 @@ typedef struct macro {
 } MACRO;
 
 typedef struct macro_stream {
-    BUFFER_STREAM   bstr;       /* Base class: buffer stream */
-    int             nargs;      /* Add number-of-macro-arguments */
-    int             cond;       /* Add saved conditional stack */
+  BUFFER_STREAM bstr; /* Base class: buffer stream */
+  int nargs;          /* Add number-of-macro-arguments */
+  int cond;           /* Add saved conditional stack */
 } MACRO_STREAM;
-
 
 #ifndef MACROS__C
 extern STREAM_VTBL macro_stream_vtbl;
 #endif
 
-MACRO          *new_macro(
-    char *label);
-void            free_macro(
-    MACRO *mac);
+MACRO* new_macro(char* label);
+void free_macro(MACRO* mac);
 
-MACRO          *defmacro(
-    char *cp,
-    STACK *stack,
-    int called);
+MACRO* defmacro(char* cp, STACK* stack, int called);
 
-STREAM         *expandmacro(
-    STREAM *refstr,
-    MACRO *mac,
-    char *cp);
+STREAM* expandmacro(STREAM* refstr, MACRO* mac, char* cp);
 
-ARG            *new_arg(
-    void);
+ARG* new_arg(void);
 
-void            read_body(
-    STACK *stack,
-    BUFFER *gb,
-    char *name,
-    int called);
-void            eval_arg(
-    STREAM *refstr,
-    ARG *arg);
-BUFFER         *subst_args(
-    BUFFER *text,
-    ARG *args);
-
-
+void read_body(STACK* stack, BUFFER* gb, const char* name, int called);
+void eval_arg(STREAM* refstr, ARG* arg);
+BUFFER* subst_args(BUFFER* text, ARG* args);
 
 #endif

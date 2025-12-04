@@ -38,28 +38,26 @@ DAMAGE.
 
 #include "stream2.h"
 
+#include <string>
+
 /* Routines to open and read entries from a macro library */
 
 typedef struct mlbent {
-    char           *label;
-    unsigned long   position;
-    int             length;
+  std::string label;
+  unsigned long position;
+  int length;
 } MLBENT;
 
 typedef struct mlb {
-    FILE           *fp;
-    MLBENT         *directory;
-    int             nentries;
+  FILE* fp;
+  MLBENT* directory;
+  int nentries;
 } MLB;
 
-extern MLB     *mlb_open(
-    char *name);
-extern BUFFER  *mlb_entry(
-    MLB *mlb,
-    char *name);
-extern void     mlb_close(
-    MLB *mlb);
-extern void     mlb_extract(
-    MLB *mlb);
+extern MLB* mlb_open(const char* name);
+extern BUFFER* mlb_entry(MLB* mlb, std::string_view name);
+extern BUFFER* mlb_entry(MLB* mlb, const char* name);
+extern void mlb_close(MLB* mlb);
+extern void mlb_extract(MLB* mlb);
 
 #endif /* MLB_H */

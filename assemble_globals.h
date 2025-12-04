@@ -32,16 +32,18 @@ extern int      last_lsb;       /* The last block in which a macro
 
 extern int      last_locsym;    /* The last local symbol number generated */
 
-extern int      enabl_debug;    /* Whether assembler debugging is enabled */
+// Whether assembler debugging is enabled
+extern bool enabl_debug;
 
-extern int      enabl_ama;      /* When set, chooses absolute (037) versus
-                                   PC-relative */
-/* (067) addressing mode */
-extern int      enabl_lsb;      /* When set, stops non-local symbol
-                                   definitions from delimiting local
-                                   symbol sections. */
+// When set, chooses absolute (037) versus PC-relative (067) addressing mode
+extern bool enabl_ama;
 
-extern int      enabl_gbl;      /* Implicit definition of global symbols */
+// When set, stops non-local symbol definitions from delimiting local symbol
+// sections.
+extern bool enabl_lsb;
+
+// Implicit definition of global symbols
+extern bool enabl_gbl;
 
 extern int      suppressed;     /* Assembly suppressed by failed conditional */
 

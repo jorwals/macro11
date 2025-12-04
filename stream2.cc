@@ -50,16 +50,14 @@ DAMAGE.
 
 /* new_buffer allocates a new buffer */
 
-BUFFER         *new_buffer(
-    void)
-{
-    BUFFER         *buf = memcheck(malloc(sizeof(BUFFER)));
+BUFFER* new_buffer(void) {
+  BUFFER* buf = static_cast<BUFFER*>(memcheck(malloc(sizeof(BUFFER))));
 
-    buf->length = 0;
-    buf->size = 0;
-    buf->use = 1;
-    buf->buffer = NULL;
-    return buf;
+  buf->length = 0;
+  buf->size = 0;
+  buf->use = 1;
+  buf->buffer = nullptr;
+  return buf;
 }
 
 /* buffer_resize makes the buffer at least the requested size. */
@@ -75,12 +73,12 @@ void buffer_resize(
 
     if (size == 0) {
         free(buff->buffer);
-        buff->buffer = NULL;
+        buff->buffer = nullptr;
     } else {
-        if (buff->buffer == NULL)
-            buff->buffer = memcheck(malloc(buff->size));
+        if (buff->buffer == nullptr)
+          buff->buffer = static_cast<char*>(memcheck(malloc(buff->size)));
         else
-            buff->buffer = memcheck(realloc(buff->buffer, buff->size));
+          buff->buffer = static_cast<char*>(memcheck(realloc(buff->buffer, buff->size)));
     }
 }
 
@@ -122,10 +120,10 @@ void buffer_appendn(
     if (needed >= buf->size) {
         buf->size = needed + GROWBUF_INCR;
 
-        if (buf->buffer == NULL)
-            buf->buffer = memcheck(malloc(buf->size));
+        if (buf->buffer == nullptr)
+          buf->buffer = static_cast<char*>(memcheck(malloc(buf->size)));
         else
-            buf->buffer = memcheck(realloc(buf->buffer, buf->size));
+          buf->buffer = static_cast<char*>(memcheck(realloc(buf->buffer, buf->size)));
     }
 
     memcpy(buf->buffer + buf->length, str, len);
@@ -141,10 +139,10 @@ void buffer_append_line(
 {
     char           *nl;
 
-    if ((nl = strchr(str, '\n')) != NULL)
-        buffer_appendn(buf, str, (int) (nl - str + 1));
+    if ((nl = strchr(str, '\n')) != nullptr)
+      buffer_appendn(buf, str, static_cast<int>(nl - str + 1));
     else
-        buffer_appendn(buf, str, strlen(str));
+      buffer_appendn(buf, str, strlen(str));
 }
 
 /* Base STREAM class methods */
@@ -156,9 +154,9 @@ void stream_construct(
     char *name)
 {
     str->line = 0;
-    str->name = memcheck(strdup(name));
-    str->next = NULL;
-    str->vtbl = NULL;
+    str->name = static_cast<char*>(memcheck(strdup(name)));
+    str->next = nullptr;
+    str->vtbl = nullptr;
 }
 
 /* stream_delete destroys and deletes (frees) a STREAM */
@@ -179,25 +177,25 @@ char           *buffer_stream_gets(
 {
     char           *nl;
     char           *cp;
-    BUFFER_STREAM  *bstr = (BUFFER_STREAM *) str;
+    BUFFER_STREAM  *bstr = reinterpret_cast<BUFFER_STREAM*>(str);
     BUFFER         *buf = bstr->buffer;
 
-    if (buf == NULL)
-        return NULL;                   /* No buffer */
+    if (buf == nullptr)
+        return nullptr;                   /* No buffer */
 
     if (bstr->offset >= buf->length)
-        return NULL;
+        return nullptr;
 
     cp = buf->buffer + bstr->offset;
 
     /* Find the next line in preparation for the next call */
 
-    nl = memchr(cp, '\n', buf->length - bstr->offset);
+    nl = static_cast<char*>(memchr(cp, '\n', buf->length - bstr->offset));
 
     if (nl)
         nl++;
 
-    bstr->offset = (int) (nl - buf->buffer);
+    bstr->offset = static_cast<int>(nl - buf->buffer);
     str->line++;
 
     return cp;
@@ -205,24 +203,20 @@ char           *buffer_stream_gets(
 
 /* STREAM::close for a buffer stream */
 
-void buffer_stream_delete(
-    STREAM *str)
-{
-    BUFFER_STREAM  *bstr = (BUFFER_STREAM *) str;
+void buffer_stream_delete(STREAM* str) {
+  BUFFER_STREAM* bstr = reinterpret_cast<BUFFER_STREAM*>(str);
 
-    buffer_free(bstr->buffer);
-    stream_delete(str);
+  buffer_free(bstr->buffer);
+  stream_delete(str);
 }
 
 /* STREAM::rewind for a buffer stream */
 
-void buffer_stream_rewind(
-    STREAM *str)
-{
-    BUFFER_STREAM  *bstr = (BUFFER_STREAM *) str;
+void buffer_stream_rewind(STREAM* str) {
+  BUFFER_STREAM* bstr = reinterpret_cast<BUFFER_STREAM*>(str);
 
-    bstr->offset = 0;
-    str->line = 0;
+  bstr->offset = 0;
+  str->line = 0;
 }
 
 /* BUFFER_STREAM vtbl */
@@ -238,7 +232,7 @@ void buffer_stream_construct(
 {
     bstr->stream.vtbl = &buffer_stream_vtbl;
 
-    bstr->stream.name = memcheck(strdup(name));
+    bstr->stream.name = static_cast<char*>(memcheck(strdup(name)));
 
     bstr->buffer = buffer_clone(buf);
     bstr->offset = 0;
@@ -262,72 +256,60 @@ STREAM         *new_buffer_stream(
     BUFFER *buf,
     char *name)
 {
-    BUFFER_STREAM  *bstr = memcheck(malloc(sizeof(BUFFER_STREAM)));
+  BUFFER_STREAM* bstr =
+      static_cast<BUFFER_STREAM*>(memcheck(malloc(sizeof(BUFFER_STREAM))));
 
-    buffer_stream_construct(bstr, buf, name);
-    return &bstr->stream;
+  buffer_stream_construct(bstr, buf, name);
+  return &bstr->stream;
 }
 
 /* *** FILE_STREAM implementation */
 
 /* Implement STREAM::gets for a file stream */
 
-static char    *file_gets(
-    STREAM *str)
-{
-    int             i,
-                    c;
-    FILE_STREAM    *fstr = (FILE_STREAM *) str;
+static char* file_gets(STREAM* str) {
+  int i, c;
+  FILE_STREAM* fstr = reinterpret_cast<FILE_STREAM*>(str);
 
-    if (fstr->fp == NULL)
-        return NULL;
+  if (fstr->fp == nullptr) return nullptr;
 
-    if (feof(fstr->fp))
-        return NULL;
+  if (feof(fstr->fp)) return nullptr;
 
-    /* Read single characters, end of line when '\n' or '\f' hit */
+  /* Read single characters, end of line when '\n' or '\f' hit */
 
-    i = 0;
-    while (c = fgetc(fstr->fp), c != '\n' && c != '\f' && c != EOF) {
-        if (c == 0)
-            continue;                  /* Don't buffer zeros */
-        if (c == '\r')
-            continue;                  /* Don't buffer carriage returns either */
-        if (i < STREAM_BUFFER_SIZE - 2)
-            fstr->buffer[i++] = c;
-    }
+  i = 0;
+  while (c = fgetc(fstr->fp), c != '\n' && c != '\f' && c != EOF) {
+    if (c == 0) continue;    /* Don't buffer zeros */
+    if (c == '\r') continue; /* Don't buffer carriage returns either */
+    if (i < STREAM_BUFFER_SIZE - 2) fstr->buffer[i++] = c;
+  }
 
-    fstr->buffer[i++] = '\n';          /* Silently transform formfeeds
-                                          into newlines */
-    fstr->buffer[i] = 0;
+  fstr->buffer[i++] = '\n'; /* Silently transform formfeeds
+                               into newlines */
+  fstr->buffer[i] = 0;
 
-    if (c == '\n')
-        fstr->stream.line++;           /* Count a line */
+  if (c == '\n') fstr->stream.line++; /* Count a line */
 
-    return fstr->buffer;
+  return fstr->buffer;
 }
 
 /* Implement STREAM::destroy for a file stream */
 
-void file_destroy(
-    STREAM *str)
-{
-    FILE_STREAM    *fstr = (FILE_STREAM *) str;
+void file_destroy(STREAM* str) {
+  FILE_STREAM* fstr = reinterpret_cast<FILE_STREAM*>(str);
 
-    fclose(fstr->fp);
-    free(fstr->buffer);
-    stream_delete(str);
+  fclose(fstr->fp);
+  free(fstr->buffer);
+  stream_delete(str);
 }
 
 /* Implement STREAM::rewind for a file stream */
 
-void file_rewind(
-    STREAM *str)
-{
-    FILE_STREAM    *fstr = (FILE_STREAM *) str;
+void file_rewind(STREAM* str) {
+  FILE_STREAM* fstr = reinterpret_cast<FILE_STREAM*>(str);
 
-    rewind(fstr->fp);
-    str->line = 0;
+  rewind(fstr->fp);
+  str->line = 0;
 }
 
 static STREAM_VTBL file_stream_vtbl = {
@@ -343,14 +325,14 @@ STREAM         *new_file_stream(
     FILE_STREAM    *str;
 
     fp = fopen(filename, "r");
-    if (fp == NULL)
-        return NULL;
+    if (fp == nullptr)
+        return nullptr;
 
-    str = memcheck(malloc(sizeof(FILE_STREAM)));
+    str = static_cast<FILE_STREAM*>(memcheck(malloc(sizeof(FILE_STREAM))));
 
     str->stream.vtbl = &file_stream_vtbl;
-    str->stream.name = memcheck(strdup(filename));
-    str->buffer = memcheck(malloc(STREAM_BUFFER_SIZE));
+    str->stream.name = static_cast<char*>(memcheck(strdup(filename)));
+    str->buffer = static_cast<char*>(memcheck(malloc(STREAM_BUFFER_SIZE)));
     str->fp = fp;
     str->stream.line = 0;
 
@@ -364,7 +346,7 @@ STREAM         *new_file_stream(
 void stack_init(
     STACK *stack)
 {
-    stack->top = NULL;                 /* Too simple */
+    stack->top = nullptr;                 /* Too simple */
 }
 
 /* stack_pop removes and deletes the topmost STRAM on the stack */
@@ -375,7 +357,7 @@ void stack_pop(
     STREAM         *top = stack->top;
     STREAM         *next = top->next;
 
-    top->vtbl->delete(top);
+    top->vtbl->xdelete(top);
     stack->top = next;
 }
 
@@ -398,13 +380,13 @@ char           *stack_gets(
 {
     char           *line;
 
-    if (stack->top == NULL)
-        return NULL;
+    if (stack->top == nullptr)
+        return nullptr;
 
-    while ((line = stack->top->vtbl->gets(stack->top)) == NULL) {
+    while ((line = stack->top->vtbl->gets(stack->top)) == nullptr) {
         stack_pop(stack);
-        if (stack->top == NULL)
-            return NULL;
+        if (stack->top == nullptr)
+            return nullptr;
     }
 
     return line;

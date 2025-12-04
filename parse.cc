@@ -12,53 +12,39 @@
 #include "assemble_globals.h"
 
 
-/* skipwhite - used everywhere to advance a char pointer past spaces */
-
-char           *skipwhite(
-    char *cp)
-{
-    while (*cp == ' ' || *cp == '\t')
-        cp++;
-    return cp;
+// skipwhite - used everywhere to advance a char pointer past spaces
+char* skipwhite(char* cp) {
+  while (*cp == ' ' || *cp == '\t') cp++;
+  return cp;
 }
 
-/* skipdelim - used everywhere to advance between tokens.  Whitespace
-   and one comma are allowed delims. */
-
-char           *skipdelim(
-    char *cp)
-{
-    cp = skipwhite(cp);
-    if (*cp == ',')
-        cp = skipwhite(cp + 1);
-    return cp;
+// skipdelim - used everywhere to advance between tokens.  Whitespace and one
+// comma are allowed delims.
+char* skipdelim(char* cp) {
+  cp = skipwhite(cp);
+  if (*cp == ',') cp = skipwhite(cp + 1);
+  return cp;
 }
 
-/* Parses a string from the input stream. */
-/* If not bracketed by <...> or ^/.../, then */
-/* the string is delimited by trailing comma or whitespace. */
-/* Allows nested <>'s */
+// Parses a string from the input stream.  If not bracketed by <...> or ^/.../,
+// then the string is delimited by trailing comma or whitespace.  Allows nested
+// <>'s
+char* getstring(char* cp, char** endp) {
+  int len;
+  int start;
+  char* str;
 
-char           *getstring(
-    char *cp,
-    char **endp)
-{
-    int             len;
-    int             start;
-    char           *str;
+  if (!brackrange(cp, &start, &len, endp)) {
+    start = 0;
+    len = strcspn(cp, " \t\n,;");
+    if (endp) *endp = cp + len;
+  }
 
-    if (!brackrange(cp, &start, &len, endp)) {
-        start = 0;
-        len = strcspn(cp, " \t\n,;");
-        if (endp)
-            *endp = cp + len;
-    }
+  str = static_cast<char*>(memcheck(malloc(len + 1)));
+  memcpy(str, cp + start, len);
+  str[len] = 0;
 
-    str = memcheck(malloc(len + 1));
-    memcpy(str, cp + start, len);
-    str[len] = 0;
-
-    return str;
+  return str;
 }
 
 /* Get what would be the operation code from the line.  */
@@ -75,11 +61,11 @@ SYMBOL         *get_op(
 
     cp = skipwhite(cp);
     if (EOL(*cp))
-        return NULL;
+        return nullptr;
 
     label = get_symbol(cp, &cp, &local);
-    if (label == NULL)
-        return NULL;                   /* No operation code. */
+    if (label == nullptr)
+        return nullptr;                   /* No operation code. */
 
     cp = skipwhite(cp);
     if (*cp == ':') {                  /* A label definition? */
@@ -87,9 +73,9 @@ SYMBOL         *get_op(
         if (*cp == ':')
             cp++;                      /* Skip it */
         free(label);
-        label = get_symbol(cp, &cp, NULL);
-        if (label == NULL)
-            return NULL;
+        label = get_symbol(cp, &cp, nullptr);
+        if (label == nullptr)
+            return nullptr;
     }
 
     op = lookup_sym(label, &system_st);
@@ -112,7 +98,7 @@ int get_mode(
 {
     EX_TREE        *value;
 
-    mode->offset = NULL;
+    mode->offset = nullptr;
     mode->rel = 0;
     mode->type = 0;
 
@@ -234,7 +220,7 @@ int get_mode(
 
         if (sym->section->type == SECTION_REGISTER) {
             free_tree(mode->offset);
-            mode->offset = NULL;
+            mode->offset = nullptr;
             mode->type |= sym->value;
             return TRUE;
         }
@@ -267,73 +253,64 @@ int get_mode(
    of IEEE floating point formats, so expect some differences.  Sorry
    again. */
 
-int parse_float(
-    char *cp,
-    char **endp,
-    int size,
-    unsigned *flt)
-{
-    double          d;          /* value */
-    double          frac;       /* fractional value */
-    ulong64         ufrac;      /* fraction converted to 49 bit
-                                   unsigned integer */
-    int             i;          /* Number of fields converted by sscanf */
-    int             n;          /* Number of characters converted by sscanf */
-    int             sexp;       /* Signed exponent */
-    unsigned        exp;        /* Unsigned excess-128 exponent */
-    unsigned        sign = 0;   /* Sign mask */
+int parse_float(char* cp, char** endp, int size, unsigned* flt) {
+  double d;          /* value */
+  double frac;       /* fractional value */
+  uint64_t ufrac;    /* fraction converted to 49 bit unsigned integer */
+  int i;             /* Number of fields converted by sscanf */
+  int n;             /* Number of characters converted by sscanf */
+  int sexp;          /* Signed exponent */
+  unsigned exp;      /* Unsigned excess-128 exponent */
+  unsigned sign = 0; /* Sign mask */
 
-    i = sscanf(cp, "%lf%n", &d, &n);
-    if (i == 0)
-        return 0;                      /* Wasn't able to convert */
+  i = sscanf(cp, "%lf%n", &d, &n);
+  if (i == 0) return 0; /* Wasn't able to convert */
 
-    cp += n;
-    if (endp)
-        *endp = cp;
+  cp += n;
+  if (endp) *endp = cp;
 
-    if (d == 0.0) {
-        flt[0] = flt[1] = flt[2] = flt[3] = 0;  /* All-bits-zero equals zero */
-        return 1;                      /* Good job. */
+  if (d == 0.0) {
+    flt[0] = flt[1] = flt[2] = flt[3] = 0; /* All-bits-zero equals zero */
+    return 1;                              /* Good job. */
+  }
+
+  frac = frexp(d, &sexp); /* Separate into exponent and mantissa */
+  if (sexp < -128 || sexp > 127) return 0; /* Exponent out of range. */
+
+  exp = sexp + 128; /* Make excess-128 mode */
+  exp &= 0xff;      /* express in 8 bits */
+
+  if (frac < 0) {
+    sign = 0100000; /* Negative sign */
+    frac = -frac;   /* fix the mantissa */
+  }
+
+  /* The following big literal is 2 to the 49th power: */
+  ufrac = static_cast<uint64_t>(frac *
+                                72057594037927936.0); /* Align fraction bits */
+
+  /* Round from FLT4 to FLT2 */
+  if (size < 4) {
+    ufrac += 0x80000000; /* Round to nearest 32-bit
+                            representation */
+
+    if (ufrac > 0x200000000000) { /* Overflow? */
+      ufrac >>= 1;                /* Normalize */
+      exp--;
     }
+  }
 
-    frac = frexp(d, &sexp);            /* Separate into exponent and mantissa */
-    if (sexp < -128 || sexp > 127)
-        return 0;                      /* Exponent out of range. */
-
-    exp = sexp + 128;                  /* Make excess-128 mode */
-    exp &= 0xff;                       /* express in 8 bits */
-
-    if (frac < 0) {
-        sign = 0100000;                /* Negative sign */
-        frac = -frac;                  /* fix the mantissa */
+  flt[0] = (unsigned)(sign | (exp << 7) | ((ufrac >> 48) & 0x7F));
+  if (size > 1) {
+    flt[1] = (unsigned)((ufrac >> 32) & 0xffff);
+    if (size > 2) {
+      flt[2] = (unsigned)((ufrac >> 16) & 0xffff);
+      flt[3] = (unsigned)((ufrac >> 0) & 0xffff);
     }
+  }
 
-    /* The following big literal is 2 to the 49th power: */
-    ufrac = (ulong64) (frac * 72057594037927936.0);     /* Align fraction bits */
-
-    /* Round from FLT4 to FLT2 */
-    if (size < 4) {
-        ufrac += 0x80000000;           /* Round to nearest 32-bit
-                                          representation */
-
-        if (ufrac > 0x200000000000) {  /* Overflow? */
-            ufrac >>= 1;               /* Normalize */
-            exp--;
-        }
-    }
-
-    flt[0] = (unsigned) (sign | (exp << 7) | ((ufrac >> 48) & 0x7F));
-    if (size > 1) {
-        flt[1] = (unsigned) ((ufrac >> 32) & 0xffff);
-        if (size > 2) {
-            flt[2] = (unsigned) ((ufrac >> 16) & 0xffff);
-            flt[3] = (unsigned) ((ufrac >> 0) & 0xffff);
-        }
-    }
-
-    return 1;
+  return 1;
 }
-
 
 /* The recursive-descent expression parser parse_expr. */
 
@@ -457,77 +434,66 @@ EX_TREE        *parse_binary(
     return leftp;
 }
 
-/* get_symbol is used all over the place to pull a symbol out of the
-   text.  */
+// get_symbol() is used all over the place to pull a symbol out of the text.
+char* get_symbol(char* cp, char** endp, int* islocal) {
+  int len;
+  char* symcp;
 
-char           *get_symbol(
-    char *cp,
-    char **endp,
-    int *islocal)
-{
-    int             len;
-    char           *symcp;
-    int             digits = 0;
+  cp = skipwhite(cp);  // Skip leading whitespace
 
-    cp = skipwhite(cp);                /* Skip leading whitespace */
+  if (!issym(*cp)) return nullptr;
 
-    if (!issym(*cp))
-        return NULL;
+  int digits = 0;
+  if (isdigit(*cp)) digits = 2; // Think about digit count
 
-    digits = 0;
-    if (isdigit(*cp))
-        digits = 2;                    /* Think about digit count */
+  for (symcp = cp + 1; issym(*symcp); symcp++) {
+    // Make a note if not a digit
+    if (!isdigit(*symcp)) digits--;
+  }
 
-    for (symcp = cp + 1; issym(*symcp); symcp++) {
-        if (!isdigit(*symcp))          /* Not a digit? */
-            digits--;                  /* Make a note. */
+  if (digits == 2) return nullptr; // Not a symbol, it's a digit string
+
+  if (endp) *endp = symcp;
+
+  len = static_cast<int>(symcp - cp);
+
+  // Now limit length
+  if (len > symbol_len) len = symbol_len;
+
+  symcp = static_cast<char*>(memcheck(malloc(len + 1)));
+
+  memcpy(symcp, cp, len);
+  symcp[len] = 0;
+  upcase(symcp);
+
+  if (islocal) {
+    *islocal = 0;
+
+    // Turn to local label format
+    if (digits == 1) {
+      if (symcp[len - 1] == '$') {
+        constexpr size_t symsz = 32;
+        char* newsym =
+            static_cast<char*>(memcheck(malloc(symsz))); // Overkill
+
+        snprintf(newsym, symsz, "%ld$%d", strtol(symcp, nullptr, 10), lsb);
+        free(symcp);
+        symcp = newsym;
+        if (islocal) *islocal = SYMBOLFLAG_LOCAL;
+      } else {
+        free(symcp);
+        return nullptr;
+      }
     }
-
-    if (digits == 2)
-        return NULL;                   /* Not a symbol, it's a digit string */
-
-    if (endp)
-        *endp = symcp;
-
-    len = (int) (symcp - cp);
-
-    /* Now limit length */
-    if (len > symbol_len)
-        len = symbol_len;
-
-    symcp = memcheck(malloc(len + 1));
-
-    memcpy(symcp, cp, len);
-    symcp[len] = 0;
-    upcase(symcp);
-
-    if (islocal) {
-        *islocal = 0;
-
-        /* Turn to local label format */
-        if (digits == 1) {
-            if (symcp[len - 1] == '$') {
-                char           *newsym = memcheck(malloc(32));  /* Overkill */
-
-                sprintf(newsym, "%ld$%d", strtol(symcp, NULL, 10), lsb);
-                free(symcp);
-                symcp = newsym;
-                if (islocal)
-                    *islocal = SYMBOLFLAG_LOCAL;
-            } else {
-                free(symcp);
-                return NULL;
-            }
-        }
-    } else {
-        /* disallow local label format */
-        if (isdigit(*symcp)) {
-            free(symcp);
-            return NULL;
-        }
+  } else {
+    /* disallow local label format */
+    if (isdigit(*symcp)) {
+      free(symcp);
+      return nullptr;
     }
+  }
 
-    return symcp;
+  return symcp;
 }
 
 /*
@@ -605,7 +571,7 @@ EX_TREE        *parse_unary(
         cp++;
         reg = strtoul(cp, &cp, 8);
         if (reg > 7)
-            return ex_err(NULL, cp);
+            return ex_err(nullptr, cp);
 
         /* This returns references to the built-in register symbols */
         tp = new_ex_tree();
@@ -676,9 +642,9 @@ EX_TREE        *parse_unary(
 
                 cp += 2;
                 if (brackrange(cp, &start, &len, &endcp))
-                    value = rad50(cp + start, NULL);
+                  value = rad50(cp + start, nullptr);
                 else
-                    value = rad50(cp, &endcp);
+                  value = rad50(cp, const_cast<const char**>(&endcp));
                 tp = new_ex_lit(value);
                 tp->cp = endcp;
                 return tp;
@@ -689,7 +655,7 @@ EX_TREE        *parse_unary(
                 char           *endcp;
 
                 if (!parse_float(cp + 2, &endcp, 1, flt)) {
-                    tp = ex_err(NULL, cp + 2);
+                    tp = ex_err(nullptr, cp + 2);
                 } else {
                     tp = new_ex_lit(flt[0]);
                     tp->cp = endcp;
@@ -754,12 +720,12 @@ EX_TREE        *parse_unary(
         char           *label;
         int             local;
 
-        if ((label = get_symbol(cp, NULL, &local)) == NULL) {
+        if ((label = get_symbol(cp, nullptr, &local)) == nullptr) {
             char           *endcp;
             unsigned long   value;
             int             rad = radix;
 
-            /* get_symbol returning NULL assures me that it's not a
+            /* get_symbol returning nullptr assures me that it's not a
                local label.  */
 
             /* Look for a trailing period, to indicate decimal... */
@@ -793,18 +759,18 @@ EX_TREE        *parse_unary(
 
         if (!(label = get_symbol(cp, &cp, &local))) {
             cp++;                      /*JH: eat first char of illegal label, else endless loop on implied .WORD */
-            tp = ex_err(NULL, cp);     /* Not a valid label. */
+            tp = ex_err(nullptr, cp);     /* Not a valid label. */
             return tp;
         }
 
         sym = lookup_sym(label, &symbol_st);
-        if (sym == NULL) {
+        if (sym == nullptr) {
             /* A symbol from the "PST", which means an instruction
                code. */
             sym = lookup_sym(label, &system_st);
         }
 
-        if (sym != NULL) {
+        if (sym != nullptr) {
             tp = new_ex_tree();
             tp->cp = cp;
             tp->type = EX_SYM;
@@ -816,11 +782,11 @@ EX_TREE        *parse_unary(
 
         /* The symbol was not found. Create an "undefined symbol"
            reference. */
-        sym = memcheck(malloc(sizeof(SYMBOL)));
+        sym = static_cast<SYMBOL*>(memcheck(malloc(sizeof(SYMBOL))));
         sym->label = label;
         sym->flags = SYMBOLFLAG_UNDEFINED | local;
         sym->stmtno = stmtno;
-        sym->next = NULL;
+        sym->next = nullptr;
         sym->section = &absolute_section;
         sym->value = 0;
 

@@ -34,16 +34,14 @@ USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
 */
 
-extern unsigned rad50(
-    char *cp,
-    char **endp);
+#include <string>
+#include <string_view>
 
-extern void     rad50x2(
-    char *cp,
-    unsigned *rp);
-
-extern void     unrad50(
-    unsigned word,
-    char *cp);
+extern unsigned rad50(const char* cp, const char** endp);
+extern unsigned rad50(std::string_view cp, size_t* endidx);
+extern void rad50x2(const char* cp, unsigned int* rp);
+extern void rad50x2(std::string_view cp, unsigned int* rp);
+extern void unrad50(unsigned word, char *cp);
+extern std::string unrad50(unsigned word);
 
 #endif /* RAD50_H */
